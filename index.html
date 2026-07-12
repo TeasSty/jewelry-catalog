@@ -1,22 +1,280 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ювелирный каталог</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5">
+  <title>Ювелирное производство · ИП Воронин</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: 'Inter', sans-serif;
+      padding-top: 70px;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+    .navbar {
+      position: fixed;
+      top:0; left:0; width:100%;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      height:70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      z-index: 1000;
+    }
+    .logo { font-weight:600; font-size:1.3rem; color:#fff; letter-spacing:0.5px; }
+    .logo i { margin-right:8px; color:#aaa; }
+    .nav-links { display:flex; gap:2rem; font-size:0.95rem; }
+    .nav-links a { color:#ccc; transition:0.2s; }
+    .nav-links a:hover { color:#fff; }
+    .hamburger { display:none; font-size:1.5rem; color:#eee; cursor:pointer; background:none; border:none; }
+
+    .mobile-menu {
+      position:fixed; top:0; left:0; width:100%; height:100vh;
+      background:#1a1a1a; z-index:999;
+      display:flex; flex-direction:column;
+      transform:translateX(100%); transition:transform 0.3s ease;
+      padding: 1.5rem; overflow-y: auto;
+    }
+    .mobile-menu.open { transform:translateX(0); }
+    .mobile-close {
+      position:absolute; top:1.5rem; right:2rem;
+      font-size:2rem; color:#aaa; cursor:pointer; background:none; border:none;
+    }
+    .mobile-top-links {
+      display:flex; flex-direction:column; gap:0.8rem;
+      margin-top: 2.5rem; margin-bottom: 1.5rem;
+      border-bottom: 1px solid #2a2a2a; padding-bottom: 1.5rem;
+    }
+    .mobile-top-links a { font-size:1.3rem; color:#ddd; padding: 0.3rem 0; }
+    .m-cat-label {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:0.8rem 0; border-bottom:1px solid #262626;
+      cursor:pointer; color:#ddd; font-size:1.1rem; user-select:none;
+    }
+    .m-cat-label i:last-child { font-size:0.8rem; color:#777; transition:0.2s; }
+    .m-cat-label.open i:last-child { transform:rotate(180deg); }
+    .m-sub-menu { padding-left:1.2rem; max-height:0; overflow:hidden; transition:max-height 0.3s ease; }
+    .m-sub-menu.open { max-height:400px; }
+    .m-sub-menu a { display:block; padding:0.6rem 0; font-size:1rem; color:#b0b0b0; }
+
+    .hero { padding: 3rem 2rem 2rem; text-align: center; border-bottom:1px solid #2a2a2a; }
+    .hero h1 { font-weight:400; font-size:2.6rem; letter-spacing:1px; color:#fff; }
+    .hero p { color:#aaa; margin-top:0.25rem; }
+    
+    .catalog-layout { display:flex; gap:2rem; padding:2rem; max-width:1440px; margin:0 auto; align-items:flex-start; }
+    .sidebar { position: sticky; top:90px; width:240px; flex-shrink:0; background:#1e1e1e; border-radius:12px; padding:1rem 0.5rem; border:1px solid #2a2a2a; max-height:calc(100vh - 110px); overflow-y:auto; }
+    .cat-label {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:0.6rem 0.8rem; border-radius:6px; cursor:pointer;
+      color:#ddd; user-select:none; transition:0.1s;
+    }
+    .cat-label:hover, .cat-label.active { background:#2a2a2a; color:#fff; }
+    .cat-label i:last-child { font-size:0.7rem; color:#888; transition:0.2s; }
+    .cat-label.open i:last-child { transform:rotate(180deg); }
+    .sub-menu { padding-left:1.2rem; max-height:0; overflow:hidden; transition:max-height 0.3s ease; }
+    .sub-menu.open { max-height:300px; }
+    .sub-menu a {
+      display:block; padding:0.4rem 0.8rem; font-size:0.9rem;
+      color:#b0b0b0; border-radius:4px; transition:0.1s; cursor:pointer;
+    }
+    .sub-menu a:hover, .sub-menu a.active { background:#2a2a2a; color:#fff; }
+    .catalog-content { flex:1; min-width:0; }
+    .search-wrap { display:flex; align-items:center; background:#222; border:1px solid #333; border-radius:40px; padding:0.4rem 1.2rem; margin-bottom:2rem; }
+    .search-wrap i { color:#888; margin-right:12px; font-size:1rem; }
+    .search-wrap input { background:transparent; border:none; padding:0.6rem 0; color:#e0e0e0; font-size:0.95rem; width:100%; outline:none; }
+    .product-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1.5rem; }
+    .product-card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:1rem 0.8rem; display:flex; flex-direction:column; transition:0.15s; }
+    .product-card img { width:100%; aspect-ratio:1/1; object-fit:contain; background:#111; border-radius:8px; margin-bottom:0.6rem; }
+    .product-card .name { font-weight:500; color:#f0f0f0; font-size:1rem; margin-bottom:0.2rem; }
+    .product-card .weight { font-size:0.8rem; color:#999; margin-bottom:0.5rem; }
+    .product-card.placeholder { background:#1a1a1a; border:1px dashed #333; justify-content:center; align-items:center; text-align:center; color:#555; padding:1.5rem 0.5rem; pointer-events:none; }
+    .product-card.placeholder .placeholder-icon { font-size:2.2rem; color:#2a2a2a; margin-bottom:0.5rem; }
+    .product-card.placeholder .placeholder-text { color:#555; font-weight:300; }
+    .pagination { display:flex; justify-content:center; gap:0.8rem; margin-top:2.5rem; flex-wrap:wrap; }
+    .pagination span { display:inline-block; padding:0.4rem 1rem; border:1px solid #333; border-radius:30px; color:#aaa; background:#1a1a1a; user-select:none; }
+    .pagination span.active { background:#2a2a2a; border-color:#666; color:#fff; }
+    .pagination span:not(.disabled):not(.active) { cursor:pointer; }
+    .pagination span:not(.disabled):not(.active):hover { background:#2a2a2a; border-color:#555; }
+    .footer { border-top:1px solid #2a2a2a; padding:2.5rem 2rem; margin-top:2rem; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem; max-width:1440px; margin-left:auto; margin-right:auto; }
+    .footer-links { display:flex; gap:2rem; align-items:center; flex-wrap:wrap; }
+    .footer-links a { color:#aaa; transition:0.2s; display:inline-flex; align-items:center; gap:0.5rem; }
+    .footer-links a:hover { color:#fff; }
+    .footer-copy { color:#666; font-size:0.9rem; }
+
+    @media (max-width:1024px) { .product-grid { grid-template-columns:repeat(4,1fr); } }
+    @media (max-width:768px) {
+      .product-grid { grid-template-columns:repeat(3,1fr); }
+      .footer { flex-direction:column; text-align:center; gap:1rem; }
+      .footer-links { justify-content:center; }
+    }
+    @media (max-width:640px) {
+      .navbar { padding:0 1rem; }
+      .nav-links { display:none; }
+      .hamburger { display:block; }
+      .hero h1 { font-size:2rem; }
+      .product-grid { grid-template-columns:repeat(3,1fr); gap:1rem; }
+      .footer { padding:1.5rem 1rem; }
+      .sidebar { display: none; }
+    }
+    @media (max-width:480px) {
+      body { padding-top:60px; }
+      .navbar { height:60px; }
+      .hero { padding:1.5rem 1rem; }
+      .catalog-layout { padding:0.8rem; flex-direction:column; }
+      .product-grid { grid-template-columns:repeat(2,1fr); gap:0.8rem; }
+      .product-card { padding:0.6rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Добро пожаловать</h1>
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-  <script>
-    if (window.netlifyIdentity) {
-      window.netlifyIdentity.on("init", user => {
-        if (user && window.location.hash.includes("confirmation_token")) {
-          window.location.href = "/admin/";
-        }
+
+<nav class="navbar">
+  <div class="logo"><i class="fas fa-gem"></i> ИП ВОРОНИН</div>
+  <div class="nav-links">
+    <a href="#hero">Главная</a>
+    <a href="#catalog">Каталог</a>
+    <a href="#footer">Контакты</a>
+  </div>
+  <button class="hamburger" id="hamburgerBtn"><i class="fas fa-bars"></i></button>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <button class="mobile-close" id="mobileClose"><i class="fas fa-times"></i></button>
+  <div class="mobile-top-links">
+    <a href="#hero" class="mobile-link">Главная</a>
+    <a href="#catalog" class="mobile-link">Каталог</a>
+    <a href="#footer" class="mobile-link">Контакты</a>
+  </div>
+  <div class="mobile-cat-list" id="mobileCatList"></div>
+</div>
+
+<section class="hero" id="hero">
+  <h1>Ювелирное производство</h1>
+  <p>ИП Воронин • Кострома</p>
+</section>
+
+<div class="catalog-layout" id="catalog">
+  <aside class="sidebar" id="sidebarMenu"></aside>
+  <div class="catalog-content">
+    <div class="search-wrap">
+      <i class="fas fa-search"></i>
+      <input type="text" id="searchInput" placeholder="Поиск по названию...">
+    </div>
+    <div id="productGrid" class="product-grid"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<footer class="footer" id="footer">
+  <div class="footer-links">
+    <a href="mailto:info@voronin-kostroma.ru"><i class="fas fa-envelope"></i> Обратная связь</a>
+    <a href="tel:+74951234567"><i class="fas fa-phone"></i> +7 (495) 123-45-67</a>
+  </div>
+  <div class="footer-copy">© 2014–2026 ИП Воронин</div>
+</footer>
+
+<script>
+  (function() {
+    const items = [
+      {img:'https://воронинкострома.рф/files/items/items2652-t.jpg',name:'кбн-01-а',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2659-t.jpg',name:'кбн-01-б',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2656-t.jpg',name:'кбн-01-в',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2654-t.jpg',name:'кбн-01-г',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2653-t.jpg',name:'кбн-02-а',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2655-t.jpg',name:'кбн-02-б',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2657-t.jpg',name:'кбн-02-в',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items2658-t.jpg',name:'кбн-02-г',w:'1.90 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items518-t.jpg',name:'кп-001',w:'2.36 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items524-t.jpg',name:'кп-002',w:'1.10 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items521-t.jpg',name:'кп-003',w:'2.53 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items534-t.jpg',name:'кп-004',w:'1.72 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items522-t.jpg',name:'кп-005',w:'1.25 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items526-t.jpg',name:'кп-006',w:'2.05 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items530-t.jpg',name:'кп-007',w:'1.50 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items525-t.jpg',name:'кп-008',w:'1.30 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items531-t.jpg',name:'кп-009',w:'2.31 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items527-t.jpg',name:'кп-010',w:'1.43 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items528-t.jpg',name:'кп-011',w:'1.73 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items535-t.jpg',name:'кп-012',w:'1.56 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items529-t.jpg',name:'кп-013',w:'1.56 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items537-t.jpg',name:'кп-014',w:'2.69 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items532-t.jpg',name:'кп-015',w:'1.40 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items540-t.jpg',name:'кп-016',w:'1.57 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items533-t.jpg',name:'кп-017',w:'1.77 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items539-t.jpg',name:'кп-018',w:'1.20 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items536-t.jpg',name:'кп-019',w:'1.82 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items538-t.jpg',name:'кп-020',w:'1.95 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items541-t.jpg',name:'кп-021',w:'1.83 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items550-t.jpg',name:'кп-022',w:'2.44 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items542-t.jpg',name:'кп-023',w:'1.61 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items544-t.jpg',name:'кп-024',w:'1.66 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items545-t.jpg',name:'кп-025',w:'3.65 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items547-t.jpg',name:'кп-026',w:'3.55 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items543-t.jpg',name:'кп-027',w:'1.41 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items546-t.jpg',name:'кп-028',w:'2.54 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items549-t.jpg',name:'кп-029',w:'2.46 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items551-t.jpg',name:'кп-030',w:'2.01 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items548-t.jpg',name:'кп-031',w:'1.87 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items564-t.jpg',name:'кп-032',w:'3.29 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items552-t.jpg',name:'кп-033',w:'3.20 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items554-t.jpg',name:'кп-034',w:'2.29 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items560-t.jpg',name:'кп-035',w:'2.70 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items553-t.jpg',name:'кп-036',w:'1.55 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items555-t.jpg',name:'кп-037',w:'1.74 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items556-t.jpg',name:'кп-038',w:'3.20 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items557-t.jpg',name:'кп-039',w:'2.31 гр.',cat:'rings'},
+      {img:'https://воронинкострома.рф/files/items/items558-t.jpg',name:'кп-040',w:'3.18 гр.',cat:'rings'}
+    ];
+    const allItems = items.map((x,i)=>({...x, id:i, cats: x.cat === 'rings' ? ['all','rings','classic','engagement','wedding','smooth','diamond'] : ['all']}));
+    let cur = 'all', page = 1;
+
+    function getItems() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      return allItems.filter(x => {
+        if(cur!=='all' && !x.cats.includes(cur)) return false;
+        if(q && !x.name.toLowerCase().includes(q)) return false;
+        return true;
       });
-      window.netlifyIdentity.init();
     }
-  </script>
+
+    function render() {
+      const f = getItems(), total = f.length;
+      const g = document.getElementById('productGrid');
+      if(!total){ g.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:#777;">Ничего не найдено</div>'; return; }
+      const start=(page-1)*20, end=Math.min(start+20,total);
+      let html = f.slice(start,end).map(x => `
+        <div class="product-card">
+          <img src="${x.img}" alt="${x.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%B8%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%3C/text%3E%3C/svg%3E'">
+          <div class="name">${x.name}</div>
+          <div class="weight">${x.w}</div>
+        </div>
+      `).join('');
+      if(cur==='all' && !document.getElementById('searchInput').value && total===48 && page===3) {
+        for(let i=0;i<12;i++) html+=`<div class="product-card placeholder"><div class="placeholder-icon"><i class="fas fa-clock"></i></div><div class="placeholder-text">Скоро в продаже</div></div>`;
+      }
+      g.innerHTML = html;
+    }
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      const mb = document.getElementById('mobileMenu'), hb = document.getElementById('hamburgerBtn'), mc = document.getElementById('mobileClose');
+      const toggle = (o) => { mb.classList.toggle('open', o); document.body.style.overflow = mb.classList.contains('open')?'hidden':''; };
+      hb.onclick = () => toggle();
+      mc.onclick = () => toggle(false);
+      document.querySelectorAll('.mobile-link').forEach(l => l.onclick = () => toggle(false));
+      document.getElementById('searchInput').oninput = () => { page=1; render(); };
+      render();
+    });
+  })();
+</script>
 </body>
 </html>
