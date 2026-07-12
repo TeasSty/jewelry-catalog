@@ -1,28 +1,9 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Панель управления каталогом</title>
-</head>
-<body>
-  <!-- Виджет Netlify Identity -->
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-  <script>
-    window.netlifyIdentity = window.netlifyIdentity || {};
-    window.netlifyIdentity.on('init', function(user) {
-      if (!user) {
-        window.netlifyIdentity.on('login', function() {
-          document.location.href = '/admin/';
-        });
-      }
-    });<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Панель управления каталогом</title>
-    <!-- Стили для красивой формы -->
     <style>
         body {
             margin: 0;
@@ -66,28 +47,19 @@
         <h1>Панель управления каталогом</h1>
         <p>Войдите, чтобы управлять украшениями</p>
 
-        <!-- Виджет Netlify Identity -->
         <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
         
         <script>
-            // Настройка поведения после входа
             window.netlifyIdentity = window.netlifyIdentity || {};
             window.netlifyIdentity.on('init', function(user) {
                 if (!user) {
-                    // Если пользователь не залогинен — показываем виджет
                     window.netlifyIdentity.on('login', function() {
-                        // После входа перенаправляем обратно в админку
                         document.location.href = '/admin/';
                     });
-                } else {
-                    // Если уже залогинен — сразу показываем CMS
-                    document.location.href = '/admin/';
                 }
             });
 
-            // Когда виджет загрузится, открываем окно входа
             window.addEventListener('load', function() {
-                // Небольшая задержка для инициализации
                 setTimeout(function() {
                     if (window.netlifyIdentity && !window.netlifyIdentity.currentUser()) {
                         window.netlifyIdentity.open();
@@ -97,13 +69,7 @@
         </script>
     </div>
 
-    <!-- Основной скрипт Decap CMS -->
-    <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
-</body>
-</html>
-  </script>
-
-  <!-- Decap CMS -->
-  <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+    <!-- Подключаем CMS последней -->
+    <script src="https://unpkg.com/decap-cms@3.0.0/dist/decap-cms.js"></script>
 </body>
 </html>
