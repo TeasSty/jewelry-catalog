@@ -1,23 +1,23 @@
 backend:
-  name: git-gateway
-  branch: main
+  name: git-gateway  # Используем Netlify Identity
+  branch: main       # Или master, если у вас так
 
-media_folder: "images/uploads"
+# Настройки медиафайлов (фотографии украшений)
+media_folder: "static/images/uploads"
 public_folder: "/images/uploads"
 
+# Коллекции (что будет в админке)
 collections:
-  - name: "products"
-    label: "Изделия"
-    folder: "products"
+  - name: "jewelry"
+    label: "Украшения"
+    label_singular: "Украшение"
+    folder: "content/jewelry"
     create: true
     slug: "{{slug}}"
     fields:
-      - label: "Артикул"
-        name: "title"
-        widget: "string"
-      - label: "Вес"
-        name: "weight"
-        widget: "string"
-      - label: "Фото"
-        name: "image"
-        widget: "image"
+      - { label: "Название", name: "title", widget: "string" }
+      - { label: "Описание", name: "description", widget: "text" }
+      - { label: "Цена", name: "price", widget: "number", valueType: "int" }
+      - { label: "Фотография", name: "image", widget: "image" }
+      - { label: "Категория", name: "category", widget: "select", options: ["Кольца", "Серьги", "Подвески", "Браслеты"] }
+      - { label: "В наличии", name: "inStock", widget: "boolean", default: true }
