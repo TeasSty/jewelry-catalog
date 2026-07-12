@@ -1,23 +1,18 @@
 backend:
-  name: git-gateway  # Используем Netlify Identity
-  branch: main       # Или master, если у вас так
+  name: github
+  repo: TeaSsty/jewelry-catalog
+  branch: main
 
-# Настройки медиафайлов (фотографии украшений)
-media_folder: "static/images/uploads"
+media_folder: "images/uploads"
 public_folder: "/images/uploads"
 
-# Коллекции (что будет в админке)
 collections:
-  - name: "jewelry"
-    label: "Украшения"
-    label_singular: "Украшение"
-    folder: "content/jewelry"
+  - name: "products"
+    label: "Товары"
+    folder: "content/products"
     create: true
     slug: "{{slug}}"
     fields:
-      - { label: "Название", name: "title", widget: "string" }
-      - { label: "Описание", name: "description", widget: "text" }
-      - { label: "Цена", name: "price", widget: "number", valueType: "int" }
-      - { label: "Фотография", name: "image", widget: "image" }
-      - { label: "Категория", name: "category", widget: "select", options: ["Кольца", "Серьги", "Подвески", "Браслеты"] }
-      - { label: "В наличии", name: "inStock", widget: "boolean", default: true }
+      - { label: "Артикул", name: "title", widget: "string" }
+      - { label: "Вес", name: "weight", widget: "string" }
+      - { label: "Фото", name: "image", widget: "image" }
