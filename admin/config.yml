@@ -7,11 +7,17 @@ public_folder: "/images/uploads"
 
 collections:
   - name: "products"
-    label: "Товары"
-    folder: "content/products"
+    label: "Изделия"
+    folder: "products"
     create: true
     slug: "{{slug}}"
     fields:
-      - { label: "Артикул", name: "title", widget: "string" }
-      - { label: "Вес", name: "weight", widget: "string" }
-      - { label: "Фото", name: "image", widget: "image" }
+      - label: "Артикул"
+        name: "title"
+        widget: "string"
+      - label: "Вес"
+        name: "weight"
+        widget: "string"
+      - label: "Фото"
+        name: "image"
+        widget: "image"
