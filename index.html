@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
+    /* ===== ВЕСЬ ТВОЙ СТАРЫЙ CSS (без изменений) ===== */
     * { margin:0; padding:0; box-sizing:border-box; }
     html { scroll-behavior: smooth; }
     body {
@@ -560,73 +561,50 @@
 
 <script>
   (function() {
-    // ===== ПРОКСИ ДЛЯ КАРТИНОК =====
-    const PROXY_URL = 'https://images.weserv.nl/?url=';
-    const BASE_URL = 'https://воронинкострома.рф/files/items/';
-    
-    function getImageUrl(id) {
-      const original = BASE_URL + id + '-t.jpg';
-      return PROXY_URL + encodeURIComponent(original);
+    // ===== ID ТВОЕЙ GOOGLE ТАБЛИЦЫ (УЖЕ ВСТАВЛЕН) =====
+    const SHEET_ID = '2PACX-1vTahr2F7Ly52iXRgE6OMzJ45xyY027gl3bp9Od2fqExbOnVdhl9VEIR5LT0IkFUdc3NA5-Fgrwetqkr';
+
+    // ===== ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ИЗ ТАБЛИЦЫ =====
+    async function loadProductsFromSheet() {
+      try {
+        // Используем публичный CSV-экспорт (работает для опубликованных таблиц)
+        const url = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?output=csv`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Не удалось загрузить таблицу');
+        const csvText = await response.text();
+        
+        // Парсим CSV
+        const lines = csvText.split('\n').filter(line => line.trim() !== '');
+        if (lines.length < 2) {
+          console.warn('Таблица пуста или нет данных');
+          return [];
+        }
+
+        const products = [];
+        // Пропускаем первую строку (заголовки)
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(col => col.trim());
+          // Ожидаем колонки: Артикул, Вес, Ссылка на фото
+          if (cols.length >= 3) {
+            const name = cols[0] || 'Без названия';
+            const weight = cols[1] || '0 гр.';
+            const img = cols[2] || '';
+            products.push({
+              name: name,
+              weight: weight,
+              img: img,
+              categories: ['all', 'rings', 'classic'] // пока все в категории "кольца"
+            });
+          }
+        }
+        return products;
+      } catch (error) {
+        console.error('Ошибка загрузки данных из Google Таблицы:', error);
+        return [];
+      }
     }
 
-    // ===== ТОВАРЫ (48 шт) =====
-    const itemNames = [
-      'кбн-01-а', 'кбн-01-б', 'кбн-01-в', 'кбн-01-г',
-      'кбн-02-а', 'кбн-02-б', 'кбн-02-в', 'кбн-02-г',
-      'кп-001', 'кп-002', 'кп-003', 'кп-004',
-      'кп-005', 'кп-006', 'кп-007', 'кп-008',
-      'кп-009', 'кп-010', 'кп-011', 'кп-012',
-      'кп-013', 'кп-014', 'кп-015', 'кп-016',
-      'кп-017', 'кп-018', 'кп-019', 'кп-020',
-      'кп-021', 'кп-022', 'кп-023', 'кп-024',
-      'кп-025', 'кп-026', 'кп-027', 'кп-028',
-      'кп-029', 'кп-030', 'кп-031', 'кп-032',
-      'кп-033', 'кп-034', 'кп-035', 'кп-036',
-      'кп-037', 'кп-038', 'кп-039', 'кп-040'
-    ];
-    
-    const weights = [
-      '1.90 гр.', '1.90 гр.', '1.90 гр.', '1.90 гр.',
-      '1.90 гр.', '1.90 гр.', '1.90 гр.', '1.90 гр.',
-      '2.36 гр.', '1.10 гр.', '2.53 гр.', '1.72 гр.',
-      '1.25 гр.', '2.05 гр.', '1.50 гр.', '1.30 гр.',
-      '2.31 гр.', '1.43 гр.', '1.73 гр.', '1.56 гр.',
-      '1.56 гр.', '2.69 гр.', '1.40 гр.', '1.57 гр.',
-      '1.77 гр.', '1.20 гр.', '1.82 гр.', '1.95 гр.',
-      '1.83 гр.', '2.44 гр.', '1.61 гр.', '1.66 гр.',
-      '3.65 гр.', '3.55 гр.', '1.41 гр.', '2.54 гр.',
-      '2.46 гр.', '2.01 гр.', '1.87 гр.', '3.29 гр.',
-      '3.20 гр.', '2.29 гр.', '2.70 гр.', '1.55 гр.',
-      '1.74 гр.', '3.20 гр.', '2.31 гр.', '3.18 гр.'
-    ];
-
-    const itemIds = [
-      'items2652', 'items2659', 'items2656', 'items2654',
-      'items2653', 'items2655', 'items2657', 'items2658',
-      'items518', 'items524', 'items521', 'items534',
-      'items522', 'items526', 'items530', 'items525',
-      'items531', 'items527', 'items528', 'items535',
-      'items529', 'items537', 'items532', 'items540',
-      'items533', 'items539', 'items536', 'items538',
-      'items541', 'items550', 'items542', 'items544',
-      'items545', 'items547', 'items543', 'items546',
-      'items549', 'items551', 'items548', 'items564',
-      'items552', 'items554', 'items560', 'items553',
-      'items555', 'items556', 'items557', 'items558'
-    ];
-
-    const rawItems = itemIds.map((id, idx) => ({
-      img: getImageUrl(id),
-      name: itemNames[idx],
-      weight: weights[idx]
-    }));
-
-    // Все товары относятся к категории "rings" (кольца)
-    const allItems = rawItems.map((item, idx) => {
-      return { ...item, id: idx, categories: ['all', 'rings', 'classic'] };
-    });
-
-    // ===== СТРУКТУРА МЕНЮ =====
+    // ===== СТРУКТУРА МЕНЮ (без изменений) =====
     const menuData = [
       { key: 'all', label: 'Все товары', children: [] },
       { key: 'rings', label: 'Кольца', children: [
@@ -679,7 +657,8 @@
       { key: 'misc', label: 'Разное', children: [] }
     ];
 
-    // ===== СОСТОЯНИЕ =====
+    // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
+    let allItems = [];
     let currentCategory = 'all';
     let currentPage = 1;
     const ITEMS_PER_PAGE = 20;
@@ -688,7 +667,7 @@
     const paginationEl = document.getElementById('pagination');
     const searchInput = document.getElementById('searchInput');
 
-    // ===== БУРГЕР =====
+    // ===== БУРГЕР (без изменений) =====
     const mobileMenu = document.getElementById('mobileMenu');
     const hamburgerBtn = document.getElementById('hamburgerBtn');
     const mobileClose = document.getElementById('mobileClose');
@@ -754,7 +733,7 @@
       }
     });
 
-    // ===== LIGHTBOX =====
+    // ===== LIGHTBOX (без изменений) =====
     const lightboxOverlay = document.getElementById('lightboxOverlay');
     const lightboxImg = document.getElementById('lightboxImg');
     const lightboxClose = document.getElementById('lightboxClose');
@@ -780,6 +759,7 @@
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeLightbox();
     });
+    window.openLightbox = openLightbox;
 
     // ===== ФИЛЬТРАЦИЯ =====
     function getFilteredItems() {
@@ -807,33 +787,18 @@
       const end = Math.min(start + ITEMS_PER_PAGE, totalReal);
       let realItems = filtered.slice(start, end);
       
-      const isAllProducts = currentCategory === 'all' && searchInput.value.trim() === '';
-      const showPlaceholders = (currentPage === 3) && isAllProducts && totalReal === 48;
-      
-      let placeholders = 0;
-      if (showPlaceholders) {
-        placeholders = 12;
-      }
-
+      // Убираем логику с плейсхолдерами, так как количество товаров может быть любым
       let html = '';
       realItems.forEach(item => {
+        const imgSrc = item.img || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%9D%D0%B5%D1%82 %D1%84%D0%BE%D1%82%D0%BE%3C/text%3E%3C/svg%3E';
         html += `
-          <div class="product-card" data-id="${item.id}">
-            <img src="${item.img}" alt="${item.name}" loading="lazy" onclick="openLightbox('${item.img}')" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%98%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%3C/text%3E%3C/svg%3E'">
+          <div class="product-card" data-id="${item.id || Math.random()}">
+            <img src="${imgSrc}" alt="${item.name}" loading="lazy" onclick="openLightbox('${imgSrc}')" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%98%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%3C/text%3E%3C/svg%3E'">
             <div class="name">${item.name}</div>
             <div class="weight">${item.weight}</div>
           </div>
         `;
       });
-
-      for (let i = 0; i < placeholders; i++) {
-        html += `
-          <div class="product-card placeholder">
-            <div class="placeholder-icon"><i class="fas fa-clock"></i></div>
-            <div class="placeholder-text">Скоро в продаже</div>
-          </div>
-        `;
-      }
 
       grid.innerHTML = html;
 
@@ -870,7 +835,6 @@
       });
     }
 
-    // ===== ОБНОВЛЕНИЕ URL С ПАРАМЕТРОМ СТРАНИЦЫ =====
     function updateURL(page) {
       const url = new URL(window.location);
       if (page > 1) {
@@ -881,17 +845,16 @@
       window.history.replaceState({ page: page }, '', url);
     }
 
-    // ===== ЧТЕНИЕ ПАРАМЕТРА ИЗ URL =====
     function getPageFromURL() {
       const params = new URLSearchParams(window.location.search);
       const page = parseInt(params.get('page'));
-      if (page && page >= 1 && page <= 3) {
+      if (page && page >= 1) {
         return page;
       }
       return 1;
     }
 
-    // ===== ФУНКЦИЯ ДЛЯ РЕНДЕРА МЕНЮ =====
+    // ===== РЕНДЕР МЕНЮ (без изменений) =====
     function renderMenu(container, isMobile) {
       let html = '';
       
@@ -949,7 +912,6 @@
           } else {
             if (key) {
               setActiveCategory(key);
-              // Обновляем URL при смене категории (сбрасываем на страницу 1)
               currentPage = 1;
               updateURL(1);
               if (isMobile && window.innerWidth < 640) {
@@ -976,7 +938,6 @@
       });
     }
 
-    // ===== РЕНДЕР ДЕСКТОПНОГО И МОБИЛЬНОГО МЕНЮ =====
     function renderSidebar() {
       const sidebar = document.getElementById('sidebarMenu');
       renderMenu(sidebar, false);
@@ -987,7 +948,6 @@
       renderMenu(mobileCatalog, true);
     }
 
-    // ===== УСТАНОВКА АКТИВНОЙ КАТЕГОРИИ =====
     function setActiveCategory(key) {
       currentCategory = key;
       
@@ -1019,8 +979,26 @@
     }
 
     // ===== ИНИЦИАЛИЗАЦИЯ =====
-    function init() {
-      // Читаем страницу из URL
+    async function init() {
+      // Загружаем данные из Google Таблицы
+      allItems = await loadProductsFromSheet();
+      
+      // Если данных нет — показываем сообщение
+      if (allItems.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:3rem 0; color:#777;">Нет товаров в каталоге. Добавьте их в Google Таблицу.</div>`;
+        // Меню всё равно рендерим
+        renderSidebar();
+        renderMobileCatalog();
+        return;
+      }
+
+      // Добавляем id и категории (пока все — 'rings')
+      allItems = allItems.map((item, idx) => ({
+        ...item,
+        id: idx,
+        categories: ['all', 'rings', 'classic'] // при желании можно расширить логику категорий
+      }));
+
       const pageFromURL = getPageFromURL();
       currentPage = pageFromURL;
       
@@ -1028,7 +1006,6 @@
       renderMobileCatalog();
       setActiveCategory('all');
       
-      // Принудительно устанавливаем страницу из URL
       renderProducts();
       
       searchInput.addEventListener('input', function() {
@@ -1047,11 +1024,9 @@
       });
     }
 
-    window.openLightbox = openLightbox;
     document.addEventListener('DOMContentLoaded', init);
   })();
 </script>
 
 </body>
 </html>
-<!-- Данный сайт является статическим каталогом. Не содержит баз данных и серверного кода. Для защиты от взлома и DDOS используйте стандартные настройки хостинга (SSL, защита от DDOS). -->
