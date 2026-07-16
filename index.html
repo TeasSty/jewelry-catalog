@@ -1,1031 +1,773 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5">
-  <title>Ювелирное производство · ИП Воронин</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <style>
-    /* ===== ВЕСЬ ТВОЙ СТАРЫЙ CSS (без изменений) ===== */
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      background: #1a1a1a;
-      color: #e0e0e0;
-      font-family: 'Inter', sans-serif;
-      padding-top: 70px;
-      line-height: 1.5;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ИП Воронин — Ювелирный каталог</title>
+<meta name="description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1a1a1a;
+    --bg-raised:#232323;
+    --bg-raised-2:#2a2a2a;
+    --line:#3a3a3a;
+    --text:#e0e0e0;
+    --text-dim:#9a9a9a;
+    --accent:#c9a24b;
+    --accent-dim:#8f7736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;}
+  img{max-width:100%;display:block;}
+
+  /* ===== NAV ===== */
+  .nav{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    height:74px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 28px;
+    background:rgba(26,26,26,.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  
+  /* Логотип по твоему скриншоту */
+  .logo{
+    display:flex;
+    flex-direction:column;
+    line-height:1.15;
+    text-align:left;
+  }
+  .logo-main {
+    font-weight:900;
+    font-size:20px;
+    letter-spacing:.02em;
+    color:#ffffff;
+    text-transform:uppercase;
+  }
+  .logo-sub {
+    font-size:9.5px;
+    font-weight:600;
+    letter-spacing:.18em;
+    color:#8a8a8a;
+    text-transform:uppercase;
+    margin-top:4px;
+  }
+
+  .nav-links{display:flex;gap:28px;font-size:14px;font-weight:500;color:var(--text-dim);}
+  .nav-links a:hover{color:var(--text);}
+  .burger{
+    display:none;flex-direction:column;justify-content:center;gap:5px;
+    width:36px;height:36px;background:none;border:none;cursor:pointer;
+  }
+  .burger span{display:block;height:2px;width:100%;background:var(--text);transition:.25s;}
+  .burger.open span:nth-child(1){transform:translateY(7px) rotate(45deg);}
+  .burger.open span:nth-child(2){opacity:0;}
+  .burger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
+
+  /* ===== HERO ===== */
+  .hero{
+    padding:160px 28px 60px;
+    text-align:center;
+    border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(ellipse at top, rgba(201,162,75,.07), transparent 60%),
+      var(--bg);
+  }
+  .hero .eyebrow{
+    font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);font-weight:600;
+  }
+  .hero h1{
+    font-size:clamp(30px,5vw,54px);
+    font-weight:800;
+    margin-top:14px;
+    letter-spacing:-.01em;
+  }
+  .hero p{
+    max-width:520px;margin:16px auto 0;color:var(--text-dim);font-size:15px;
+  }
+
+  /* ===== LAYOUT ===== */
+  .layout{
+    display:grid;grid-template-columns:280px 1fr;gap:0;max-width:1280px;margin:0 auto;
+  }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar{
+    border-right:1px solid var(--line);padding:32px 20px;align-self:start;position:sticky;top:74px;
+    max-height:calc(100vh - 74px);overflow-y:auto;
+  }
+  .sidebar h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;}
+  .cat{border-bottom:1px solid var(--line);}
+  
+  .cat-btn{
+    width:100%;display:flex;justify-content:space-between;align-items:center;
+    background:none;border:none;color:var(--text);cursor:pointer;
+    padding:13px 4px;font-size:14px;font-weight:500;text-align:left;
+  }
+  .cat-btn:hover{color:var(--accent);}
+  .cat-btn .count{color:var(--text-dim);font-size:12px;font-weight:400;}
+  .cat-btn .arrow{transition:transform .2s;color:var(--text-dim);font-size:11px;margin-left:8px;}
+  
+  .cat.open .cat-btn .arrow{transform:rotate(180deg);}
+  .cat.active > .cat-btn{color:var(--accent);font-weight:600;}
+  
+  /* Плавное открытие панели подкатегорий */
+  .cat-panel{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height 0.25s ease-out;
+  }
+  .cat.open .cat-panel{
+    max-height:300px;
+  }
+  .cat-panel-inner{
+    padding: 4px 4px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Стили подкатегорий */
+  .subcat-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.15s;
+    font-weight: 400;
+  }
+  .subcat-btn:hover {
+    color: var(--text);
+  }
+  .subcat-btn.active {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Кнопка "Все товары" сверху */
+  .all-goods-btn {
+    width: 100%;
+    padding: 14px 4px;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .all-goods-btn:hover, .all-goods-btn.active {
+    color: var(--accent);
+  }
+
+  /* ===== MAIN ===== */
+  .main{padding:32px 28px 60px;min-width:0;}
+  .toolbar{
+    display:flex;gap:14px;align-items:center;margin-bottom:22px;flex-wrap:wrap;
+  }
+  .search-wrap{
+    flex:1;min-width:220px;position:relative;
+  }
+  .search-wrap input{
+    width:100%;background:var(--bg-raised);border:1px solid var(--line);color:var(--text);
+    padding:12px 16px 12px 40px;border-radius:6px;font-size:14px;outline:none;
+  }
+  .search-wrap input:focus{border-color:var(--accent-dim);}
+  .search-wrap svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.5;}
+  .result-count{font-size:13px;color:var(--text-dim);white-space:nowrap;}
+
+  .breadcrumb{font-size:13px;color:var(--text-dim);margin-bottom:18px;}
+  .breadcrumb b{color:var(--text);font-weight:600;}
+
+  .grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px;
+  }
+  .card{
+    background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;overflow:hidden;
+    transition:border-color .2s, transform .2s;
+  }
+  .card:hover{border-color:var(--accent-dim);transform:translateY(-2px);}
+  .card-img{
+    aspect-ratio:1/1;background:var(--bg-raised-2);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+  }
+  .card-img img{width:100%;height:100%;object-fit:cover;}
+  .card-body{padding:12px 14px 14px;}
+  .card-sku{font-size:13px;font-weight:600;letter-spacing:.02em;}
+  .card-weight{font-size:12px;color:var(--text-dim);margin-top:4px;}
+
+  .empty{
+    text-align:center;padding:60px 20px;color:var(--text-dim);font-size:14px;
+  }
+
+  /* ===== PAGINATION ===== */
+  .pagination{
+    display:flex;justify-content:center;gap:6px;margin-top:34px;flex-wrap:wrap;
+  }
+  .page-btn{
+    min-width:36px;height:36px;border-radius:6px;background:var(--bg-raised);
+    border:1px solid var(--line);color:var(--text-dim);cursor:pointer;font-size:13px;
+  }
+  .page-btn:hover{border-color:var(--accent-dim);color:var(--text);}
+  .page-btn.active{background:var(--accent-dim);color:#1a1a1a;border-color:var(--accent-dim);font-weight:600;}
+  .page-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* ===== BOTTOM BAR ===== */
+  .bottom-bar{
+    position:fixed;bottom:0;left:0;right:0;z-index:100;display:none;
+    background:rgba(26,26,26,.96);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);
+    padding:8px 0 max(8px, env(safe-area-inset-bottom));
+    justify-content:space-around;
+  }
+  .bottom-bar a{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    font-size:10px;color:var(--text-dim);flex:1;padding:4px;
+  }
+  .bottom-bar a.active,.bottom-bar a:hover{color:var(--accent);}
+
+  footer{
+    border-top:1px solid var(--line);padding:28px;text-align:center;color:var(--text-dim);font-size:12px;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr;}
+    .sidebar{
+      position:fixed;top:74px;left:0;bottom:0;width:280px;background:var(--bg);
+      transform:translateX(-100%);transition:transform .25s ease;z-index:90;
+      border-right:1px solid var(--line);
     }
-    a { color: inherit; text-decoration: none; }
-    
-    /* ===== НАВИГАЦИЯ ===== */
-    .navbar {
-      position: fixed;
-      top:0; left:0; width:100%;
-      background: #1a1a1a;
-      border-bottom: 1px solid #2a2a2a;
-      height:70px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 2rem;
-      z-index: 1000;
+    .sidebar.open{transform:translateX(0);}
+    .nav-links{display:none;}
+    .burger{display:flex;}
+    .overlay{
+      display:none;position:fixed;inset:74px 0 0 0;background:rgba(0,0,0,.5);z-index:80;
     }
-    .logo { font-weight:600; font-size:1.3rem; color:#fff; letter-spacing:0.5px; }
-    .logo i { margin-right:8px; color:#aaa; }
-    .nav-links { display:flex; gap:2rem; font-size:0.95rem; }
-    .nav-links a { color:#ccc; transition:0.2s; cursor:pointer; }
-    .nav-links a:hover { color:#fff; }
-    .hamburger {
-      display:none;
-      font-size:1.5rem;
-      color:#eee;
-      cursor:pointer;
-      background:none;
-      border:none;
-      padding:0.3rem 0.5rem;
-      z-index:1001;
-    }
-    
-    /* ===== МОБИЛЬНОЕ МЕНЮ (БУРГЕР) ===== */
-    .mobile-menu {
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100vh;
-      background: #1a1a1a;
-      z-index:999;
-      display:flex;
-      flex-direction:column;
-      transform:translateX(100%);
-      transition:transform 0.35s ease;
-      padding:80px 1.5rem 2rem;
-      pointer-events:none;
-      overflow-y:auto;
-    }
-    .mobile-menu.open {
-      transform:translateX(0);
-      pointer-events:auto;
-    }
-    .mobile-menu::-webkit-scrollbar { width:3px; background:#2a2a2a; }
-    .mobile-menu::-webkit-scrollbar-thumb { background:#555; border-radius:10px; }
-    
-    .mobile-close {
-      position:absolute;
-      top:1.5rem; right:2rem;
-      font-size:2rem;
-      color:#aaa;
-      cursor:pointer;
-      background:none;
-      border:none;
-      z-index:1001;
-    }
-    .mobile-close:hover { color:#fff; }
-    
-    .mobile-nav-links {
-      display:flex;
-      flex-direction:column;
-      gap:0.5rem;
-      margin-bottom:1.5rem;
-    }
-    .mobile-nav-links a {
-      font-size:1.2rem;
-      color:#ddd;
-      padding:0.6rem 0;
-      border-bottom:1px solid #2a2a2a;
-      cursor:pointer;
-      transition:0.2s;
-    }
-    .mobile-nav-links a:hover { color:#fff; }
-    
-    .mobile-divider {
-      border-top:1px solid #2a2a2a;
-      margin:0.5rem 0 1rem 0;
-      opacity:0.5;
-    }
-    
-    .mobile-catalog {
-      flex:1;
-      overflow-y:auto;
-      padding-bottom:2rem;
-    }
-    .mobile-catalog .menu-item {
-      cursor:pointer;
-      user-select:none;
-    }
-    .mobile-catalog .menu-item .label {
-      padding:0.6rem 0.5rem;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      color:#b0b0b0;
-      border-bottom:1px solid #2a2a2a;
-      transition:0.1s;
-    }
-    .mobile-catalog .menu-item .label:hover {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .mobile-catalog .menu-item.active > .label {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .mobile-catalog .menu-item .label i.fa-chevron-down {
-      font-size:0.7rem;
-      color:#666;
-      transition:0.2s;
-    }
-    .mobile-catalog .menu-item.open > .label i.fa-chevron-down {
-      transform:rotate(180deg);
-    }
-    .mobile-catalog .sub-items {
-      max-height:0;
-      overflow:hidden;
-      transition:max-height 0.3s ease;
-    }
-    .mobile-catalog .sub-items.open {
-      max-height:400px;
-    }
-    .mobile-catalog .sub-items .sub-item {
-      padding:0.4rem 0.5rem 0.4rem 1.5rem;
-      display:block;
-      color:#999;
-      border-bottom:1px solid #222;
-      transition:0.1s;
-      cursor:pointer;
-    }
-    .mobile-catalog .sub-items .sub-item:hover {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .mobile-catalog .sub-items .sub-item.active {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .mobile-catalog .menu-item-spacer { height:2px; }
-    .mobile-catalog .menu-item-bracelets { margin-bottom:4px; }
-    
-    /* ===== ГЕРОЙ ===== */
-    .hero {
-      padding: 3rem 2rem 2rem;
-      text-align: center;
-      border-bottom:1px solid #2a2a2a;
-      scroll-margin-top: 70px;
-    }
-    .hero h1 { font-weight:400; font-size:2.6rem; letter-spacing:1px; color:#fff; }
-    .hero p { color:#aaa; margin-top:0.25rem; }
-    
-    /* ===== КАТАЛОГ ===== */
-    .catalog-layout {
-      display:flex;
-      gap:2rem;
-      padding:2rem;
-      max-width:1440px;
-      margin:0 auto;
-      align-items:flex-start;
-      scroll-margin-top: 70px;
-    }
-    
-    /* ===== БОКОВОЕ МЕНЮ (ДЕСКТОП) ===== */
-    .sidebar {
-      position: sticky;
-      top:90px;
-      width:240px;
-      flex-shrink:0;
-      background:#1e1e1e;
-      border-radius:12px;
-      padding:0.5rem 0;
-      border:1px solid #2a2a2a;
-      max-height:calc(100vh - 110px);
-      overflow-y:auto;
-    }
-    .sidebar::-webkit-scrollbar { width:3px; background:#2a2a2a; }
-    .sidebar::-webkit-scrollbar-thumb { background:#555; border-radius:10px; }
-    
-    .sidebar .menu-item {
-      cursor:pointer;
-      user-select:none;
-      transition:0.1s;
-    }
-    .sidebar .menu-item .label {
-      padding:0.6rem 1rem;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      color:#b0b0b0;
-      transition:0.1s;
-    }
-    .sidebar .menu-item .label:hover {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .sidebar .menu-item.active > .label {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .sidebar .menu-item .label i.fa-chevron-down {
-      font-size:0.7rem;
-      color:#666;
-      transition:0.2s;
-    }
-    .sidebar .menu-item.open > .label i.fa-chevron-down {
-      transform:rotate(180deg);
-    }
-    .sidebar .sub-items {
-      max-height:0;
-      overflow:hidden;
-      transition:max-height 0.3s ease;
-    }
-    .sidebar .sub-items.open {
-      max-height:300px;
-    }
-    .sidebar .sub-items .sub-item {
-      padding:0.4rem 1rem 0.4rem 2rem;
-      display:block;
-      color:#999;
-      transition:0.1s;
-      cursor:pointer;
-    }
-    .sidebar .sub-items .sub-item:hover {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .sidebar .sub-items .sub-item.active {
-      background:#2a2a2a;
-      color:#fff;
-    }
-    .sidebar .menu-item-spacer { height:4px; }
-    .sidebar .menu-item-bracelets { margin-bottom:8px; }
-    
-    /* ===== КОНТЕНТ ===== */
-    .catalog-content { flex:1; min-width:0; }
-    .search-wrap {
-      display:flex;
-      align-items:center;
-      background:#222;
-      border:1px solid #333;
-      border-radius:40px;
-      padding:0.4rem 1.2rem;
-      margin-bottom:2rem;
-    }
-    .search-wrap i { color:#888; margin-right:12px; font-size:1rem; }
-    .search-wrap input {
-      background:transparent;
-      border:none;
-      padding:0.6rem 0;
-      color:#e0e0e0;
-      font-size:0.95rem;
-      width:100%;
-      outline:none;
-    }
-    .search-wrap input::placeholder { color:#666; }
-    
-    /* ===== ТОВАРЫ ===== */
-    .product-grid {
-      display:grid;
-      grid-template-columns:repeat(5,1fr);
-      gap:1.5rem;
-    }
-    .product-card {
-      background:#1e1e1e;
-      border:1px solid #2a2a2a;
-      border-radius:12px;
-      padding:1rem 0.8rem;
-      display:flex;
-      flex-direction:column;
-      transition:0.15s;
-    }
-    .product-card:hover:not(.placeholder) { border-color:#444; }
-    .product-card img {
-      width:100%;
-      aspect-ratio:1/1;
-      object-fit:contain;
-      background:#111;
-      border-radius:8px;
-      margin-bottom:0.6rem;
-      cursor:pointer;
-      transition:0.2s;
-    }
-    .product-card img:hover { opacity:0.85; }
-    .product-card .name { font-weight:500; color:#f0f0f0; font-size:1rem; margin-bottom:0.2rem; }
-    .product-card .weight { font-size:0.8rem; color:#999; margin-bottom:0; }
-    .product-card.placeholder {
-      background:#1a1a1a;
-      border:1px dashed #333;
-      justify-content:center;
-      align-items:center;
-      text-align:center;
-      color:#555;
-      font-size:0.95rem;
-      padding:1.5rem 0.5rem;
-      pointer-events:none;
-      user-select:none;
-    }
-    .product-card.placeholder .placeholder-icon {
-      font-size:2.2rem;
-      color:#2a2a2a;
-      margin-bottom:0.5rem;
-    }
-    .product-card.placeholder .placeholder-text {
-      color:#555;
-      font-weight:300;
-      letter-spacing:0.3px;
-    }
-    
-    /* ===== ПАГИНАЦИЯ ===== */
-    .pagination {
-      display:flex;
-      justify-content:center;
-      gap:0.8rem;
-      margin-top:2.5rem;
-      flex-wrap:wrap;
-    }
-    .pagination span {
-      display:inline-block;
-      padding:0.4rem 1rem;
-      border:1px solid #333;
-      border-radius:30px;
-      color:#aaa;
-      cursor:default;
-      font-size:0.9rem;
-      background:#1a1a1a;
-      user-select:none;
-      transition:0.1s;
-    }
-    .pagination span.active {
-      background:#2a2a2a;
-      border-color:#666;
-      color:#fff;
-    }
-    .pagination span:not(.disabled):not(.active) { cursor:pointer; }
-    .pagination span:not(.disabled):not(.active):hover { background:#2a2a2a; border-color:#555; }
-    .pagination span.disabled { opacity:0.3; pointer-events:none; }
-    .pagination.hidden { display:none; }
-    
-    /* ===== ФУТЕР ===== */
-    .footer {
-      border-top:1px solid #2a2a2a;
-      padding:2.5rem 2rem;
-      margin-top:2rem;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      gap:1rem;
-      max-width:1440px;
-      margin-left:auto;
-      margin-right:auto;
-      scroll-margin-top: 70px;
-    }
-    .footer-links {
-      display:flex;
-      gap:2rem;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .footer-links a {
-      color:#aaa;
-      transition:0.2s;
-      display:inline-flex;
-      align-items:center;
-      gap:0.5rem;
-    }
-    .footer-links a:hover { color:#fff; }
-    .footer-copy { color:#666; font-size:0.85rem; text-align:center; }
-    
-    /* ===== LIGHTBOX ===== */
-    .lightbox-overlay {
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      background:rgba(0,0,0,0.92);
-      z-index:9999;
-      display:none;
-      justify-content:center;
-      align-items:center;
-      opacity:0;
-      transition:opacity 0.3s ease;
-      cursor:pointer;
-    }
-    .lightbox-overlay.active {
-      display:flex;
-      opacity:1;
-    }
-    .lightbox-overlay .lightbox-content {
-      position:relative;
-      max-width:90%;
-      max-height:90vh;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      cursor:default;
-    }
-    .lightbox-overlay .lightbox-content img {
-      max-width:100%;
-      max-height:90vh;
-      object-fit:contain;
-      border-radius:8px;
-      box-shadow:0 20px 60px rgba(0,0,0,0.8);
-    }
-    .lightbox-overlay .lightbox-close {
-      position:fixed;
-      top:20px;
-      right:30px;
-      font-size:2.5rem;
-      color:#fff;
-      cursor:pointer;
-      background:none;
-      border:none;
-      transition:0.2s;
-      z-index:10000;
-      opacity:0.7;
-    }
-    .lightbox-overlay .lightbox-close:hover {
-      opacity:1;
-      transform:scale(1.1);
-    }
-    
-    /* ===== АДАПТИВ ===== */
-    @media (max-width:1024px) {
-      .product-grid { grid-template-columns:repeat(4,1fr); }
-    }
-    @media (max-width:768px) {
-      .product-grid { grid-template-columns:repeat(3,1fr); }
-      .footer { flex-direction:column; text-align:center; gap:0.8rem; }
-      .footer-links { justify-content:center; }
-    }
-    @media (max-width:640px) {
-      .navbar { padding:0 1rem; }
-      .nav-links { display:none; }
-      .hamburger { display:block; }
-      .hero h1 { font-size:2rem; }
-      .product-grid { grid-template-columns:repeat(3,1fr); gap:1rem; }
-      .footer { padding:1.5rem 1rem; }
-      .footer-links { gap:1.2rem; }
-      
-      .sidebar { display:none !important; }
-      .catalog-layout { padding:0.8rem; }
-      .catalog-content { width:100%; }
-      
-      .lightbox-overlay .lightbox-close {
-        top:15px;
-        right:20px;
-        font-size:2rem;
-      }
-    }
-    @media (max-width:480px) {
-      body { padding-top:60px; }
-      .navbar { height:60px; }
-      .hero { padding:1.5rem 1rem; scroll-margin-top: 60px; }
-      .hero h1 { font-size:1.6rem; }
-      .catalog-layout { padding:0.6rem; scroll-margin-top: 60px; }
-      .product-grid { grid-template-columns:repeat(2,1fr); gap:0.8rem; }
-      .product-card { padding:0.6rem; }
-      .product-card .name { font-size:0.9rem; }
-      .product-card.placeholder { padding:1rem 0.3rem; }
-      .product-card.placeholder .placeholder-icon { font-size:1.6rem; }
-      .lightbox-overlay .lightbox-close {
-        top:12px;
-        right:16px;
-        font-size:1.8rem;
-      }
-    }
-  </style>
+    .overlay.show{display:block;}
+    .bottom-bar{display:flex;}
+    .main{padding-bottom:90px;}
+  }
+  @media (max-width:480px){
+    .nav{padding:0 16px;height:68px;}
+    .logo-main{font-size:18px;}
+    .logo-sub{font-size:8.5px;}
+    .hero{padding:130px 16px 44px;}
+    .hero h1{font-size:26px;}
+    .main{padding:24px 16px 90px;}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;}
+    .card-body{padding:10px 10px 12px;}
+    .toolbar{gap:10px;}
+    .search-wrap{min-width:0;}
+  }
+</style>
 </head>
 <body>
 
-<!-- Навигация -->
-<nav class="navbar">
-  <div class="logo"><i class="fas fa-gem"></i> ИП ВОРОНИН</div>
-  <div class="nav-links">
-    <a href="#hero">Главная</a>
-    <a href="#catalog">Каталог</a>
-    <a href="#footer">Контакты</a>
+<nav class="nav">
+  <!-- Логотип полностью по макету с картинки -->
+  <div class="logo">
+    <div class="logo-main">ИП ВОРОНИН</div>
+    <div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
   </div>
-  <button class="hamburger" id="hamburgerBtn" aria-label="Меню">
-    <i class="fas fa-bars"></i>
+  <div class="nav-links">
+    <a href="#catalog">Каталог</a>
+    <a href="#about">О нас</a>
+    <a href="#contacts">Контакты</a>
+  </div>
+  <button class="burger" id="burgerBtn" aria-label="Меню">
+    <span></span><span></span><span></span>
   </button>
 </nav>
 
-<!-- Мобильное меню (бургер) -->
-<div class="mobile-menu" id="mobileMenu">
-  <button class="mobile-close" id="mobileClose"><i class="fas fa-times"></i></button>
-  
-  <div class="mobile-nav-links">
-    <a href="#hero" class="mobile-link" data-close="true">Главная</a>
-    <a href="#catalog" class="mobile-link" data-close="true">Каталог</a>
-    <a href="#footer" class="mobile-link" data-close="true">Контакты</a>
-  </div>
-  
-  <div class="mobile-divider"></div>
-  
-  <div class="mobile-catalog" id="mobileCatalog"></div>
-</div>
+<div class="overlay" id="overlay"></div>
 
-<!-- Герой -->
-<section class="hero" id="hero">
-  <h1>Ювелирное производство</h1>
-  <p>ИП Воронин • Кострома</p>
-</section>
+<header class="hero">
+  <div class="eyebrow">ИП Воронин · Кострома</div>
+  <h1>Ювелирные изделия<br>собственного производства</h1>
+  <p>Кольца, серьги, цепи и другие украшения из золота и серебра. Актуальный каталог с артикулами и весом каждого изделия.</p>
+</header>
 
-<!-- Каталог -->
-<div class="catalog-layout" id="catalog">
-  <aside class="sidebar" id="sidebarMenu"></aside>
-  <div class="catalog-content">
-    <div class="search-wrap">
-      <i class="fas fa-search"></i>
-      <input type="text" id="searchInput" placeholder="Поиск по названию или артикулу...">
+<div class="layout" id="catalog">
+  <aside class="sidebar" id="sidebar">
+    <h2>Категории</h2>
+    
+    <button class="all-goods-btn active" id="allGoodsBtn">
+      <span>Все товары</span>
+      <span class="count" id="allGoodsCount" style="color:var(--text-dim);font-size:12px;font-weight:400;">0</span>
+    </button>
+
+    <div id="categoryList"></div>
+  </aside>
+
+  <main class="main">
+    <div class="breadcrumb">Категория: <b id="activeCatName">Все товары</b></div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Поиск по артикулу...">
+      </div>
+      <div class="result-count" id="resultCount"></div>
     </div>
-    <div id="productGrid" class="product-grid"></div>
+
+    <div class="grid" id="productGrid"></div>
+    <div class="empty" id="emptyState" style="display:none;">Товары не найдены</div>
+
     <div class="pagination" id="pagination"></div>
-  </div>
+  </main>
 </div>
 
-<!-- Lightbox -->
-<div class="lightbox-overlay" id="lightboxOverlay">
-  <button class="lightbox-close" id="lightboxClose"><i class="fas fa-times"></i></button>
-  <div class="lightbox-content">
-    <img id="lightboxImg" src="" alt="Увеличенное изображение">
-  </div>
-</div>
-
-<!-- Футер -->
-<footer class="footer" id="footer">
-  <div class="footer-links">
-    <a href="mailto:info@voronin-kostroma.ru"><i class="fas fa-envelope"></i> Обратная связь</a>
-    <a href="tel:+74951234567"><i class="fas fa-phone"></i> +7 (495) 123-45-67</a>
-  </div>
-  <div class="footer-copy">© 2026 ИП Воронин. Все права защищены.</div>
+<footer id="contacts">
+  <div>ИП Воронин · Ювелирное производство · Кострома</div>
+  <div style="margin-top:6px;">воронинкострома.рф</div>
 </footer>
 
+<nav class="bottom-bar">
+  <a href="#catalog" class="active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Каталог
+  </a>
+  <a href="#" id="searchIconBtn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    Поиск
+  </a>
+  <a href="#contacts">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.68 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.32 1.85.55 2.81.68A2 2 0 0 1 22 16.92z"/></svg>
+    Контакты
+  </a>
+</nav>
+
 <script>
-  (function() {
-    // ===== ID ТВОЕЙ GOOGLE ТАБЛИЦЫ (УЖЕ ВСТАВЛЕН) =====
-    const SHEET_ID = '2PACX-1vTahr2F7Ly52iXRgE6OMzJ45xyY027gl3bp9Od2fqExbOnVdhl9VEIR5LT0IkFUdc3NA5-Fgrwetqkr';
+(function(){
+  const IMG_BASE = "https://воронинкострома.рф/files/items/";
+  const PER_PAGE = 20;
 
-    // ===== ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ИЗ ТАБЛИЦЫ =====
-    async function loadProductsFromSheet() {
-      try {
-        // Используем публичный CSV-экспорт (работает для опубликованных таблиц)
-        const url = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?output=csv`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Не удалось загрузить таблицу');
-        const csvText = await response.text();
-        
-        // Парсим CSV
-        const lines = csvText.split('\n').filter(line => line.trim() !== '');
-        if (lines.length < 2) {
-          console.warn('Таблица пуста или нет данных');
-          return [];
-        }
+  // Исходный массив твоих товаров
+  const rawItems = [
+    ["items2652-t.jpg","кбн-01-а","1.90","кольца","классические"],
+    ["items2659-t.jpg","кбн-01-б","1.90","кольца","классические"],
+    ["items2656-t.jpg","кбн-01-в","1.90","кольца","классические"],
+    ["items2654-t.jpg","кбн-01-г","1.90","кольца","классические"],
+    ["items2653-t.jpg","кбн-02-а","1.90","кольца","классические"],
+    ["items2655-t.jpg","кбн-02-б","1.90","кольца","классические"],
+    ["items2657-t.jpg","кбн-02-в","1.90","кольца","классические"],
+    ["items2658-t.jpg","кбн-02-г","1.90","кольца","классические"],
+    ["items518-t.jpg","кп-001","2.36","кольца","помолвочные"],
+    ["items524-t.jpg","кп-002","1.10","кольца","помолвочные"],
+    ["items521-t.jpg","кп-003","2.53","кольца","помолвочные"],
+    ["items534-t.jpg","кп-004","1.72","кольца","помолвочные"],
+    ["items522-t.jpg","кп-005","1.25","кольца","помолвочные"],
+    ["items526-t.jpg","кп-006","2.05","кольца","помолвочные"],
+    ["items530-t.jpg","кп-007","1.50","кольца","помолвочные"],
+    ["items525-t.jpg","кп-008","1.30","кольца","помолвочные"],
+    ["items531-t.jpg","кп-009","2.31","кольца","помолвочные"],
+    ["items527-t.jpg","кп-010","1.43","кольца","помолвочные"],
+    ["items528-t.jpg","кп-011","1.73","кольца","помолвочные"],
+    ["items535-t.jpg","кп-012","1.56","кольца","помолвочные"],
+    ["items529-t.jpg","кп-013","1.56","кольца","помолвочные"],
+    ["items537-t.jpg","кп-014","2.69","кольца","помолвочные"],
+    ["items532-t.jpg","кп-015","1.40","кольца","помолвочные"],
+    ["items540-t.jpg","кп-016","1.57","кольца","помолвочные"],
+    ["items533-t.jpg","кп-017","1.77","кольца","помолвочные"],
+    ["items539-t.jpg","кп-018","1.20","кольца","помолвочные"],
+    ["items536-t.jpg","кп-019","1.82","кольца","помолвочные"],
+    ["items538-t.jpg","кп-020","1.95","кольца","помолвочные"],
+    ["items541-t.jpg","кп-021","1.83","кольца","помолвочные"],
+    ["items550-t.jpg","кп-022","2.44","кольца","помолвочные"],
+    ["items542-t.jpg","кп-023","1.61","кольца","помолвочные"],
+    ["items544-t.jpg","кп-024","1.66","кольца","помолвочные"],
+    ["items545-t.jpg","кп-025","3.65","кольца","помолвочные"],
+    ["items547-t.jpg","кп-026","3.55","кольца","помолвочные"],
+    ["items543-t.jpg","кп-027","1.41","кольца","помолвочные"],
+    ["items546-t.jpg","кп-028","2.54","кольца","помолвочные"],
+    ["items549-t.jpg","кп-029","2.46","кольца","помолвочные"],
+    ["items551-t.jpg","кп-030","2.01","кольца","помолвочные"],
+    ["items548-t.jpg","кп-031","1.87","кольца","помолвочные"],
+    ["items564-t.jpg","кп-032","3.29","кольца","помолвочные"],
+    ["items552-t.jpg","кп-033","3.20","кольца","помолвочные"],
+    ["items554-t.jpg","кп-034","2.29","кольца","помолвочные"],
+    ["items560-t.jpg","кп-035","2.70","кольца","помолвочные"],
+    ["items553-t.jpg","кп-036","1.55","кольца","помолвочные"],
+    ["items555-t.jpg","кп-037","1.74","кольца","помолвочные"],
+    ["items556-t.jpg","кп-038","3.20","кольца","помолвочные"],
+    ["items557-t.jpg","кп-039","2.31","кольца","помолвочные"],
+    ["items558-t.jpg","кп-040","3.18","кольца","помолвочные"]
+  ].map(([img, sku, weight, cat, subcat]) => ({
+    img: IMG_BASE + img,
+    sku,
+    weight,
+    category: cat || "",
+    subcategory: subcat || ""
+  }));
 
-        const products = [];
-        // Пропускаем первую строку (заголовки)
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(col => col.trim());
-          // Ожидаем колонки: Артикул, Вес, Ссылка на фото
-          if (cols.length >= 3) {
-            const name = cols[0] || 'Без названия';
-            const weight = cols[1] || '0 гр.';
-            const img = cols[2] || '';
-            products.push({
-              name: name,
-              weight: weight,
-              img: img,
-              categories: ['all', 'rings', 'classic'] // пока все в категории "кольца"
-            });
-          }
-        }
-        return products;
-      } catch (error) {
-        console.error('Ошибка загрузки данных из Google Таблицы:', error);
-        return [];
-      }
+  // Четкая структура меню. Подкатегории есть ТОЛЬКО у тех 7 штук, что ты прислал!
+  const categories = [
+    {
+      id: "koltsa", 
+      name: "Кольца", 
+      subs: ["Все кольца", "Классические", "Помолвочные"]
+    },
+    {
+      id: "obruch", 
+      name: "Обручальные", 
+      subs: ["Все обручальные", "Гладкие", "С алмазной гранью"]
+    },
+    {
+      id: "sergi", 
+      name: "Серьги", 
+      subs: ["Все серьги", "Золотые", "Серебряные"]
+    },
+    {
+      id: "garnitury", 
+      name: "Гарнитуры", 
+      subs: ["Все гарнитуры", "Золотые", "Серебряные"]
+    },
+    {
+      id: "podveski", 
+      name: "Подвески", 
+      subs: ["Все подвески", "Кресты", "Шармы"]
+    },
+    {
+      id: "kolie", 
+      name: "Колье", 
+      subs: ["Все колье", "Золотые", "Серебряные"]
+    },
+    {
+      id: "braslety", 
+      name: "Браслеты", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "piercing", 
+      name: "Пирсинг", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "tsepi", 
+      name: "Цепи/Браслеты (ручная работа)", 
+      subs: ["Все цепи", "Браслеты"]
+    },
+    {
+      id: "lozhki", 
+      name: "Ложки", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "broshi", 
+      name: "Броши", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "pravoslavie", 
+      name: "Православные", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "vostok", 
+      name: "Восток", 
+      subs: [] // Без подкатегорий
+    },
+    {
+      id: "raznoe", 
+      name: "Разное", 
+      subs: [] // Без подкатегорий
     }
+  ];
 
-    // ===== СТРУКТУРА МЕНЮ (без изменений) =====
-    const menuData = [
-      { key: 'all', label: 'Все товары', children: [] },
-      { key: 'rings', label: 'Кольца', children: [
-          { key: 'rings', label: 'Все кольца' },
-          { key: 'classic', label: 'Классические' },
-          { key: 'engagement', label: 'Помолвочные' }
-        ] 
-      },
-      { key: 'wedding', label: 'Обручальные', children: [
-          { key: 'wedding', label: 'Все обручальные' },
-          { key: 'smooth', label: 'Гладкие' },
-          { key: 'diamond', label: 'С алмазной гранью' }
-        ] 
-      },
-      { key: 'earrings', label: 'Серьги', children: [
-          { key: 'earrings', label: 'Все серьги' },
-          { key: 'gold_ear', label: 'Золотые' },
-          { key: 'silver_ear', label: 'Серебряные' }
-        ] 
-      },
-      { key: 'sets', label: 'Гарнитуры', children: [
-          { key: 'sets', label: 'Все гарнитуры' },
-          { key: 'gold_set', label: 'Золотые' },
-          { key: 'silver_set', label: 'Серебряные' }
-        ] 
-      },
-      { key: 'pendants', label: 'Подвески', children: [
-          { key: 'pendants', label: 'Все подвески' },
-          { key: 'cross', label: 'Кресты' },
-          { key: 'charms', label: 'Шармы' }
-        ] 
-      },
-      { key: 'necklaces', label: 'Колье', children: [
-          { key: 'necklaces', label: 'Все колье' },
-          { key: 'gold_neck', label: 'Золотые' },
-          { key: 'silver_neck', label: 'Серебряные' }
-        ] 
-      },
-      { key: 'bracelets_main', label: 'Браслеты', children: [] },
-      { key: 'piercing', label: 'Пирсинг', children: [] },
-      { key: 'chains_manual', label: 'Цепи/Браслеты (ручная работа)', children: [
-          { key: 'chains', label: 'Все цепи' },
-          { key: 'bracelets_sub', label: 'Браслеты' }
-        ] 
-      },
-      { key: 'spoons', label: 'Ложки', children: [] },
-      { key: 'brooches', label: 'Броши/Булавки', children: [] },
-      { key: 'orthodox', label: 'Православные', children: [] },
-      { key: 'east', label: 'Восток', children: [] },
-      { key: 'misc', label: 'Разное', children: [] }
-    ];
+  let activeCategory = "все товары";
+  let activeSubcategory = "";
+  let searchTerm = "";
+  let currentPage = 1;
 
-    // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
-    let allItems = [];
-    let currentCategory = 'all';
-    let currentPage = 1;
-    const ITEMS_PER_PAGE = 20;
+  function countFor(catName, subcatName = "") {
+    if (catName.toLowerCase() === "все товары") {
+      return rawItems.length;
+    }
+    if (subcatName) {
+      if (subcatName.toLowerCase().startsWith("все ")) {
+        return rawItems.filter(i => i.category === catName.toLowerCase()).length;
+      }
+      return rawItems.filter(i => i.category === catName.toLowerCase() && i.subcategory === subcatName.toLowerCase()).length;
+    }
+    return rawItems.filter(i => i.category === catName.toLowerCase()).length;
+  }
 
-    const grid = document.getElementById('productGrid');
-    const paginationEl = document.getElementById('pagination');
-    const searchInput = document.getElementById('searchInput');
-
-    // ===== БУРГЕР (без изменений) =====
-    const mobileMenu = document.getElementById('mobileMenu');
-    const hamburgerBtn = document.getElementById('hamburgerBtn');
-    const mobileClose = document.getElementById('mobileClose');
-    const mobileLinks = document.querySelectorAll('.mobile-link');
-
-    let isMenuOpen = false;
-
-    function toggleMobileMenu(forceState) {
-      const shouldOpen = forceState !== undefined ? forceState : !isMenuOpen;
+  function renderCategories(){
+    const list = document.getElementById("categoryList");
+    
+    list.innerHTML = categories.map(cat => {
+      const count = countFor(cat.name);
+      const isActive = cat.name.toLowerCase() === activeCategory;
+      const hasSubs = cat.subs.length > 0;
       
-      if (shouldOpen) {
-        mobileMenu.classList.add('open');
-        document.body.style.overflow = 'hidden';
-        hamburgerBtn.innerHTML = '<i class="fas fa-times"></i>';
-        isMenuOpen = true;
-      } else {
-        mobileMenu.classList.remove('open');
-        document.body.style.overflow = '';
-        hamburgerBtn.innerHTML = '<i class="fas fa-bars"></i>';
-        isMenuOpen = false;
+      let subsHtml = "";
+      if (hasSubs) {
+        subsHtml = cat.subs.map(sub => {
+          const subCount = countFor(cat.name, sub);
+          const isSubActive = activeSubcategory === sub.toLowerCase() && isActive;
+          return `
+            <button class="subcat-btn${isSubActive ? ' active' : ''}" data-sub="${sub.toLowerCase()}">
+              ${sub} (${subCount})
+            </button>
+          `;
+        }).join("");
       }
-    }
 
-    hamburgerBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      toggleMobileMenu();
-    });
+      return `
+        <div class="cat${isActive ? ' active' : ''}" data-cat="${cat.name.toLowerCase()}">
+          <button class="cat-btn">
+            <span>${cat.name}</span>
+            <span style="display:flex;align-items:center;">
+              <span class="count">${count}</span>
+              ${hasSubs ? '<span class="arrow">▾</span>' : ''}
+            </span>
+          </button>
+          ${hasSubs ? `
+          <div class="cat-panel">
+            <div class="cat-panel-inner">
+              ${subsHtml}
+            </div>
+          </div>` : ''}
+        </div>`;
+    }).join("");
 
-    mobileClose.addEventListener('click', function(e) {
-      e.stopPropagation();
-      toggleMobileMenu(false);
-    });
+    // Вешаем логику событий
+    list.querySelectorAll(".cat").forEach(el => {
+      const catBtn = el.querySelector(".cat-btn");
+      const catName = el.dataset.cat;
+      const targetCategoryData = categories.find(c => c.name.toLowerCase() === catName);
+      const hasSubs = targetCategoryData.subs.length > 0;
 
-    mobileLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
-        const target = this.getAttribute('href');
-        toggleMobileMenu(false);
+      catBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         
-        setTimeout(() => {
-          if (target && target.startsWith('#')) {
-            const element = document.querySelector(target);
-            if (element) {
-              element.scrollIntoView({ behavior: 'smooth' });
-            }
-          }
-        }, 200);
-      });
-    });
-
-    document.addEventListener('click', function(e) {
-      if (isMenuOpen) {
-        const isClickOnMenu = mobileMenu.contains(e.target);
-        const isClickOnHamburger = hamburgerBtn.contains(e.target);
-        if (!isClickOnMenu && !isClickOnHamburger) {
-          toggleMobileMenu(false);
-        }
-      }
-    });
-
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && isMenuOpen) {
-        toggleMobileMenu(false);
-      }
-    });
-
-    // ===== LIGHTBOX (без изменений) =====
-    const lightboxOverlay = document.getElementById('lightboxOverlay');
-    const lightboxImg = document.getElementById('lightboxImg');
-    const lightboxClose = document.getElementById('lightboxClose');
-
-    function openLightbox(imgSrc) {
-      lightboxImg.src = imgSrc;
-      lightboxOverlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeLightbox() {
-      lightboxOverlay.classList.remove('active');
-      document.body.style.overflow = '';
-      setTimeout(() => {
-        lightboxImg.src = '';
-      }, 300);
-    }
-
-    lightboxClose.addEventListener('click', closeLightbox);
-    lightboxOverlay.addEventListener('click', function(e) {
-      if (e.target === this) closeLightbox();
-    });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeLightbox();
-    });
-    window.openLightbox = openLightbox;
-
-    // ===== ФИЛЬТРАЦИЯ =====
-    function getFilteredItems() {
-      const searchTerm = searchInput.value.toLowerCase().trim();
-      return allItems.filter(item => {
-        let catMatch = currentCategory === 'all' || item.categories.includes(currentCategory);
-        if (!catMatch) return false;
-        if (searchTerm === '') return true;
-        return item.name.toLowerCase().includes(searchTerm);
-      });
-    }
-
-    // ===== РЕНДЕР ТОВАРОВ =====
-    function renderProducts() {
-      const filtered = getFilteredItems();
-      const totalReal = filtered.length;
-      
-      if (totalReal === 0) {
-        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:3rem 0; color:#777;">Товары не найдены</div>`;
-        renderPagination(0);
-        return;
-      }
-
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const end = Math.min(start + ITEMS_PER_PAGE, totalReal);
-      let realItems = filtered.slice(start, end);
-      
-      // Убираем логику с плейсхолдерами, так как количество товаров может быть любым
-      let html = '';
-      realItems.forEach(item => {
-        const imgSrc = item.img || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%9D%D0%B5%D1%82 %D1%84%D0%BE%D1%82%D0%BE%3C/text%3E%3C/svg%3E';
-        html += `
-          <div class="product-card" data-id="${item.id || Math.random()}">
-            <img src="${imgSrc}" alt="${item.name}" loading="lazy" onclick="openLightbox('${imgSrc}')" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%231a1a1a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%22 y=%22110%22 font-family=%22Inter%22 font-size=%2214%22 fill=%22%23666%22%3E%D0%98%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%3C/text%3E%3C/svg%3E'">
-            <div class="name">${item.name}</div>
-            <div class="weight">${item.weight}</div>
-          </div>
-        `;
-      });
-
-      grid.innerHTML = html;
-
-      const totalPages = Math.ceil(totalReal / ITEMS_PER_PAGE);
-      renderPagination(totalPages);
-    }
-
-    // ===== ПАГИНАЦИЯ =====
-    function renderPagination(totalPages) {
-      if (totalPages <= 1) {
-        paginationEl.innerHTML = '';
-        paginationEl.classList.add('hidden');
-        return;
-      }
-      paginationEl.classList.remove('hidden');
-      let html = '';
-      html += `<span class="${currentPage === 1 ? 'disabled' : ''}" data-page="${currentPage - 1}"><i class="fas fa-chevron-left"></i></span>`;
-      for (let i = 1; i <= totalPages; i++) {
-        html += `<span class="${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</span>`;
-      }
-      html += `<span class="${currentPage === totalPages ? 'disabled' : ''}" data-page="${currentPage + 1}"><i class="fas fa-chevron-right"></i></span>`;
-      paginationEl.innerHTML = html;
-
-      paginationEl.querySelectorAll('span[data-page]').forEach(span => {
-        span.addEventListener('click', function(e) {
-          const page = parseInt(this.dataset.page);
-          if (isNaN(page) || page < 1 || page > totalPages) return;
-          if (page === currentPage) return;
-          currentPage = page;
-          updateURL(page);
-          renderProducts();
-          grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      });
-    }
-
-    function updateURL(page) {
-      const url = new URL(window.location);
-      if (page > 1) {
-        url.searchParams.set('page', page);
-      } else {
-        url.searchParams.delete('page');
-      }
-      window.history.replaceState({ page: page }, '', url);
-    }
-
-    function getPageFromURL() {
-      const params = new URLSearchParams(window.location.search);
-      const page = parseInt(params.get('page'));
-      if (page && page >= 1) {
-        return page;
-      }
-      return 1;
-    }
-
-    // ===== РЕНДЕР МЕНЮ (без изменений) =====
-    function renderMenu(container, isMobile) {
-      let html = '';
-      
-      menuData.forEach((cat, index) => {
-        const hasChildren = cat.children && cat.children.length > 0;
-        const isActive = cat.key === currentCategory;
-        
-        let extraClass = '';
-        if (cat.key === 'bracelets_main') {
-          extraClass = ' menu-item-bracelets';
-        }
-        
-        html += `<div class="menu-item${extraClass} ${isActive ? 'active' : ''}" data-key="${cat.key}">`;
-        html += `<div class="label" data-key="${cat.key}">`;
-        html += `<span>${cat.label}</span>`;
-        if (hasChildren) {
-          html += `<i class="fas fa-chevron-down"></i>`;
-        }
-        html += `</div>`;
-        if (hasChildren) {
-          html += `<div class="sub-items" data-parent="${cat.key}">`;
-          cat.children.forEach(sub => {
-            const isSubActive = sub.key === currentCategory;
-            html += `<a class="sub-item ${isSubActive ? 'active' : ''}" data-key="${sub.key}">${sub.label}</a>`;
-          });
-          html += `</div>`;
-        }
-        html += `</div>`;
-        
-        if (index < menuData.length - 1) {
-          html += `<div class="menu-item-spacer"></div>`;
-        }
-      });
-      
-      container.innerHTML = html;
-
-      container.querySelectorAll('.menu-item > .label').forEach(label => {
-        label.addEventListener('click', function(e) {
-          const parent = this.closest('.menu-item');
-          const key = this.dataset.key;
-          const subItems = parent.querySelector('.sub-items');
+        if (hasSubs) {
+          // КАТЕГОРИИ С ПОДКАТЕГОРИЯМИ (АККОРДЕОН)
+          const isOpen = el.classList.contains("open");
           
-          const hasChildren = subItems !== null;
-          
-          if (hasChildren) {
-            const isOpen = subItems.classList.contains('open');
-            
-            container.querySelectorAll('.sub-items').forEach(s => s.classList.remove('open'));
-            container.querySelectorAll('.menu-item').forEach(m => m.classList.remove('open'));
-            
-            if (!isOpen) {
-              subItems.classList.add('open');
-              parent.classList.add('open');
-            }
-          } else {
-            if (key) {
-              setActiveCategory(key);
-              currentPage = 1;
-              updateURL(1);
-              if (isMobile && window.innerWidth < 640) {
-                toggleMobileMenu(false);
-              }
-            }
-          }
-        });
-      });
+          // Закрываем все другие аккордеоны
+          list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
 
-      container.querySelectorAll('.sub-item').forEach(item => {
-        item.addEventListener('click', function(e) {
-          e.stopPropagation();
-          const key = this.dataset.key;
-          if (key) {
-            setActiveCategory(key);
+          if (!isOpen) {
+            el.classList.add("open");
+            
+            // Активируем категорию и сбрасываем подкатегорию на "Все..." по умолчанию
+            activeCategory = catName;
+            activeSubcategory = "";
             currentPage = 1;
-            updateURL(1);
-            if (isMobile && window.innerWidth < 640) {
-              toggleMobileMenu(false);
-            }
+            
+            list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
+            document.getElementById("allGoodsBtn").classList.remove("active");
+            el.classList.add("active");
+            
+            document.getElementById("activeCatName").textContent = targetCategoryData.name;
+            renderGrid();
+          } else {
+            el.classList.remove("open");
           }
+        } else {
+          // КАТЕГОРИИ БЕЗ ПОДКАТЕГОРИЙ (Клик сразу фильтрует!)
+          // Сворачиваем все открытые аккордеоны
+          list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
+          
+          activeCategory = catName;
+          activeSubcategory = "";
+          currentPage = 1;
+
+          list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
+          document.getElementById("allGoodsBtn").classList.remove("active");
+          el.classList.add("active");
+
+          document.getElementById("activeCatName").textContent = targetCategoryData.name;
+          renderGrid();
+          closeSidebarMobile();
+        }
+      });
+
+      // События клика на подкатегории
+      if (hasSubs) {
+        el.querySelectorAll(".subcat-btn").forEach(subBtn => {
+          subBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const subName = subBtn.dataset.sub;
+            
+            activeCategory = catName;
+            activeSubcategory = subName;
+            currentPage = 1;
+
+            list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
+            el.classList.add("active");
+            
+            el.querySelectorAll(".subcat-btn").forEach(b => b.classList.remove("active"));
+            subBtn.classList.add("active");
+
+            // Название для крошек без счетчика в скобках
+            const subCleanText = subBtn.textContent.trim().split(' (')[0];
+            document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
+            
+            renderGrid();
+            closeSidebarMobile();
+          });
         });
-      });
-    }
-
-    function renderSidebar() {
-      const sidebar = document.getElementById('sidebarMenu');
-      renderMenu(sidebar, false);
-    }
-
-    function renderMobileCatalog() {
-      const mobileCatalog = document.getElementById('mobileCatalog');
-      renderMenu(mobileCatalog, true);
-    }
-
-    function setActiveCategory(key) {
-      currentCategory = key;
-      
-      document.querySelectorAll('.sidebar .menu-item, .sidebar .sub-item, .mobile-catalog .menu-item, .mobile-catalog .sub-item').forEach(el => {
-        el.classList.remove('active');
-      });
-      
-      const desktopItem = document.querySelector(`.sidebar .menu-item[data-key="${key}"]`);
-      if (desktopItem) {
-        desktopItem.classList.add('active');
       }
-      document.querySelectorAll('.sidebar .sub-item').forEach(sub => {
-        if (sub.dataset.key === key) {
-          sub.classList.add('active');
+    });
+  }
+
+  // Настройка кнопки "Все товары"
+  const allGoodsBtn = document.getElementById("allGoodsBtn");
+  document.getElementById("allGoodsCount").textContent = rawItems.length;
+  
+  allGoodsBtn.addEventListener("click", () => {
+    document.querySelectorAll("#categoryList .cat").forEach(c => {
+      c.classList.remove("open");
+      c.classList.remove("active");
+    });
+    
+    allGoodsBtn.classList.add("active");
+    activeCategory = "все товары";
+    activeSubcategory = "";
+    currentPage = 1;
+    document.getElementById("activeCatName").textContent = "Все товары";
+    
+    renderGrid();
+    closeSidebarMobile();
+  });
+
+  function getFiltered(){
+    return rawItems.filter(item => {
+      const inCategory = activeCategory === "все товары" || item.category === activeCategory;
+      let inSubcategory = true;
+      if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
+        inSubcategory = item.subcategory === activeSubcategory;
+      }
+      const matchesSearch = item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      return inCategory && inSubcategory && matchesSearch;
+    });
+  }
+
+  function renderGrid(){
+    const filtered = getFiltered();
+    const grid = document.getElementById("productGrid");
+    const empty = document.getElementById("emptyState");
+    const resultCount = document.getElementById("resultCount");
+
+    resultCount.textContent = filtered.length + (filtered.length === 1 ? " товар" : " товаров");
+
+    if(filtered.length === 0){
+      grid.innerHTML = "";
+      empty.style.display = "block";
+      document.getElementById("pagination").innerHTML = "";
+      return;
+    }
+    empty.style.display = "none";
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+    if(currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * PER_PAGE;
+    const pageItems = filtered.slice(start, start + PER_PAGE);
+
+    grid.innerHTML = pageItems.map(item => `
+      <div class="card">
+        <div class="card-img">
+          <img src="${item.img}" alt="${item.sku}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:11px;color:#666\\'>нет фото</span>'">
+        </div>
+        <div class="card-body">
+          <div class="card-sku">${item.sku}</div>
+          <div class="card-weight">${item.weight} гр.</div>
+        </div>
+      </div>
+    `).join("");
+
+    renderPagination(totalPages);
+  }
+
+  function renderPagination(totalPages){
+    const pagination = document.getElementById("pagination");
+    if(totalPages <= 1){ pagination.innerHTML = ""; return; }
+
+    let html = `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">‹</button>`;
+    for(let p = 1; p <= totalPages; p++){
+      html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+    }
+    html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">›</button>`;
+    pagination.innerHTML = html;
+
+    pagination.querySelectorAll(".page-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const page = parseInt(btn.dataset.page, 10);
+        if(!isNaN(page) && page >= 1 && page <= totalPages){
+          currentPage = page;
+          renderGrid();
+          document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
         }
       });
-      
-      const mobileItem = document.querySelector(`.mobile-catalog .menu-item[data-key="${key}"]`);
-      if (mobileItem) {
-        mobileItem.classList.add('active');
-      }
-      document.querySelectorAll('.mobile-catalog .sub-item').forEach(sub => {
-        if (sub.dataset.key === key) {
-          sub.classList.add('active');
-        }
-      });
-      
-      renderProducts();
+    });
+  }
+
+  // Search
+  document.getElementById("searchInput").addEventListener("input", (e) => {
+    searchTerm = e.target.value.trim();
+    currentPage = 1;
+    renderGrid();
+  });
+
+  document.getElementById("searchIconBtn").addEventListener("click", (e) => {
+    e.preventDefault();
+    document.getElementById("searchInput").focus();
+    document.querySelector(".main").scrollIntoView({behavior:"smooth"});
+  });
+
+  // Mobile sidebar
+  const burgerBtn = document.getElementById("burgerBtn");
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+
+  function openSidebarMobile(){
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
+    burgerBtn.classList.add("open");
+  }
+  function closeSidebarMobile(){
+    if(window.innerWidth > 900) return;
+    sidebar.classList.remove("open");
+    overlay.classList.remove("show");
+    burgerBtn.classList.remove("open");
+  }
+
+  burgerBtn.addEventListener("click", () => {
+    if(sidebar.classList.contains("open")){
+      closeSidebarMobile();
+    } else {
+      openSidebarMobile();
     }
+  });
+  overlay.addEventListener("click", closeSidebarMobile);
 
-    // ===== ИНИЦИАЛИЗАЦИЯ =====
-    async function init() {
-      // Загружаем данные из Google Таблицы
-      allItems = await loadProductsFromSheet();
-      
-      // Если данных нет — показываем сообщение
-      if (allItems.length === 0) {
-        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:3rem 0; color:#777;">Нет товаров в каталоге. Добавьте их в Google Таблицу.</div>`;
-        // Меню всё равно рендерим
-        renderSidebar();
-        renderMobileCatalog();
-        return;
-      }
-
-      // Добавляем id и категории (пока все — 'rings')
-      allItems = allItems.map((item, idx) => ({
-        ...item,
-        id: idx,
-        categories: ['all', 'rings', 'classic'] // при желании можно расширить логику категорий
-      }));
-
-      const pageFromURL = getPageFromURL();
-      currentPage = pageFromURL;
-      
-      renderSidebar();
-      renderMobileCatalog();
-      setActiveCategory('all');
-      
-      renderProducts();
-      
-      searchInput.addEventListener('input', function() {
-        currentPage = 1;
-        updateURL(1);
-        renderProducts();
-      });
-      
-      let resizeTimeout;
-      window.addEventListener('resize', function() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          renderMobileCatalog();
-          setActiveCategory(currentCategory);
-        }, 300);
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', init);
-  })();
+  // Init
+  renderCategories();
+  renderGrid();
+})();
 </script>
 
 </body>
