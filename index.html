@@ -395,79 +395,46 @@ const db = getFirestore(app);
     });
   }
 
-  // Четкая структура меню. Подкатегории есть ТОЛЬКО у тех 7 штук, что ты прислал!
-  const categories = [
-    {
-      id: "koltsa", 
-      name: "Кольца", 
-      subs: ["Все кольца", "Классические", "Помолвочные"]
-    },
-    {
-      id: "obruch", 
-      name: "Обручальные", 
-      subs: ["Все обручальные", "Гладкие", "С алмазной гранью"]
-    },
-    {
-      id: "sergi", 
-      name: "Серьги", 
-      subs: ["Все серьги", "Золотые", "Серебряные"]
-    },
-    {
-      id: "garnitury", 
-      name: "Гарнитуры", 
-      subs: ["Все гарнитуры", "Золотые", "Серебряные"]
-    },
-    {
-      id: "podveski", 
-      name: "Подвески", 
-      subs: ["Все подвески", "Кресты", "Шармы"]
-    },
-    {
-      id: "kolie", 
-      name: "Колье", 
-      subs: ["Все колье", "Золотые", "Серебряные"]
-    },
-    {
-      id: "braslety", 
-      name: "Браслеты", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "piercing", 
-      name: "Пирсинг", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "tsepi", 
-      name: "Цепи/Браслеты (ручная работа)", 
-      subs: ["Все цепи", "Браслеты"]
-    },
-    {
-      id: "lozhki", 
-      name: "Ложки", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "broshi", 
-      name: "Броши", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "pravoslavie", 
-      name: "Православные", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "vostok", 
-      name: "Восток", 
-      subs: [] // Без подкатегорий
-    },
-    {
-      id: "raznoe", 
-      name: "Разное", 
-      subs: [] // Без подкатегорий
-    }
-  ];
+  // Динамическое дерево категорий, строящееся на основе загруженных из Firestore товаров
+  let categories = [];
+
+  function buildCategories() {
+    const tempMap = {};
+    
+    rawItems.forEach(item => {
+      if (!item.category) return;
+      
+      // Приводим название к красивому регистру (первая буква заглавная)
+      const catNameFormatted = item.category.charAt(0).toUpperCase() + item.category.slice(1);
+      const catId = item.category;
+
+      if (!tempMap[catId]) {
+        tempMap[catId] = {
+          id: catId,
+          name: catNameFormatted,
+          subsSet: new Set()
+        };
+      }
+
+      if (item.subcategory) {
+        const subNameFormatted = item.subcategory.charAt(0).toUpperCase() + item.subcategory.slice(1);
+        tempMap[catId].subsSet.add(subNameFormatted);
+      }
+    });
+
+    categories = Object.values(tempMap).map(cat => {
+      const subsArray = Array.from(cat.subsSet).sort();
+      // Если у категории есть подкатегории, добавляем дефолтный пункт "Все ..." в начало списка подкатегорий
+      if (subsArray.length > 0) {
+        subsArray.unshift(`Все ${cat.name.toLowerCase()}`);
+      }
+      return {
+        id: cat.id,
+        name: cat.name,
+        subs: subsArray
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   let activeCategory = "все товары";
   let activeSubcategory = "";
@@ -740,6 +707,7 @@ const db = getFirestore(app);
 
   // Init
   await loadProducts();
+  buildCategories();
   renderCategories();
   renderGrid();
 })();
