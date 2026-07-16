@@ -42,8 +42,7 @@
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--line);
   }
-  
-  /* Логотип по твоему скриншоту */
+
   .logo{
     display:flex;
     flex-direction:column;
@@ -111,7 +110,7 @@
   }
   .sidebar h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;}
   .cat{border-bottom:1px solid var(--line);}
-  
+
   .cat-btn{
     width:100%;display:flex;justify-content:space-between;align-items:center;
     background:none;border:none;color:var(--text);cursor:pointer;
@@ -120,11 +119,10 @@
   .cat-btn:hover{color:var(--accent);}
   .cat-btn .count{color:var(--text-dim);font-size:12px;font-weight:400;}
   .cat-btn .arrow{transition:transform .2s;color:var(--text-dim);font-size:11px;margin-left:8px;}
-  
+
   .cat.open .cat-btn .arrow{transform:rotate(180deg);}
   .cat.active > .cat-btn{color:var(--accent);font-weight:600;}
-  
-  /* Плавное открытие панели подкатегорий */
+
   .cat-panel{
     max-height:0;
     overflow:hidden;
@@ -140,7 +138,6 @@
     gap: 8px;
   }
 
-  /* Стили подкатегорий */
   .subcat-btn {
     background: none;
     border: none;
@@ -160,7 +157,6 @@
     font-weight: 600;
   }
 
-  /* Кнопка "Все товары" сверху */
   .all-goods-btn {
     width: 100%;
     padding: 14px 4px;
@@ -285,7 +281,6 @@
 <body>
 
 <nav class="nav">
-  <!-- Логотип полностью по макету с картинки -->
   <div class="logo">
     <div class="logo-main">ИП ВОРОНИН</div>
     <div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
@@ -311,7 +306,7 @@
 <div class="layout" id="catalog">
   <aside class="sidebar" id="sidebar">
     <h2>Категории</h2>
-    
+
     <button class="all-goods-btn active" id="allGoodsBtn">
       <span>Все товары</span>
       <span class="count" id="allGoodsCount" style="color:var(--text-dim);font-size:12px;font-weight:400;">0</span>
@@ -378,33 +373,101 @@ const db = getFirestore(app);
 (async function(){
   const PER_PAGE = 20;
 
-  // Исходный массив твоих товаров
+  // ФИКС #2: имя файла в Firestore хранится без пути к папке (например "items540-t.jpg"),
+  // из-за чего браузер запрашивал его от корня сайта -> 404.
+  // Т.к. точная папка на Vercel неизвестна, перебираем самые частые варианты,
+  // пока не найдётся рабочий путь. Как только подтвердите реальную папку -
+  // можно оставить только её первой в списке (или единственной).
+  const IMAGE_PATH_CANDIDATES = [
+    "/images/",
+    "/img/",
+    "/photos/",
+    "/uploads/",
+    "/assets/images/",
+    "" // fallback: как есть, вдруг Firestore уже хранит путь целиком
+  ];
+
+  function firstImagePath(filename) {
+    if (!filename) return "";
+    // если в Firestore уже лежит полный URL или абсолютный путь - не трогаем
+    if (/^https?:\/\//i.test(filename) || filename.startsWith("/")) return filename;
+    return IMAGE_PATH_CANDIDATES[0] + filename;
+  }
+
+  // Общий обработчик ошибки загрузки картинки: пробует по очереди все кандидаты папок,
+  // и только если ни один не сработал - показывает "нет фото".
+  window.__handleImgError = function(imgEl, filename) {
+    if (/^https?:\/\//i.test(filename) || filename.startsWith("/")) {
+      imgEl.parentElement.innerHTML = '<span style="font-size:11px;color:#666">нет фото</span>';
+      return;
+    }
+    const tried = parseInt(imgEl.dataset.tryIndex || "0", 10);
+    const nextIndex = tried + 1;
+    if (nextIndex < IMAGE_PATH_CANDIDATES.length) {
+      imgEl.dataset.tryIndex = String(nextIndex);
+      imgEl.src = IMAGE_PATH_CANDIDATES[nextIndex] + filename;
+    } else {
+      imgEl.parentElement.innerHTML = '<span style="font-size:11px;color:#666">нет фото</span>';
+    }
+  };
+
+  // ФИКС #1: устойчивое чтение полей документа - на случай другого регистра ключа
+  // (Category/category) или иного названия поля, чтобы категория не терялась молча.
+  function getField(data, ...keys) {
+    for (const k of keys) {
+      if (data[k] !== undefined && data[k] !== null && String(data[k]).trim() !== "") {
+        return String(data[k]).trim();
+      }
+    }
+    return "";
+  }
+
   let rawItems = [];
 
   async function loadProducts() {
     const snapshot = await getDocs(collection(db, "products"));
+    let missingCategoryCount = 0;
+    let missingImgCount = 0;
+
     rawItems = snapshot.docs.map(doc => {
       const data = doc.data();
+      const category = getField(data, "category", "Category").toLowerCase();
+      const img = getField(data, "img", "image", "Image", "photo");
+
+      if (!category) missingCategoryCount++;
+      if (!img) missingImgCount++;
+
       return {
-        img: data.img,
-        sku: data.sku,
-        weight: data.weight,
-        category: (data.category || "").toLowerCase(),
-        subcategory: (data.subcategory || "").toLowerCase()
+        img,
+        sku: getField(data, "sku", "SKU", "article"),
+        weight: getField(data, "weight", "Weight"),
+        category,
+        subcategory: getField(data, "subcategory", "Subcategory").toLowerCase()
       };
     });
+
+    // Диагностика в консоли - помогает быстро увидеть реальную причину,
+    // если проблема снова в структуре данных Firestore, а не в путях.
+    console.log(`[diag] Загружено товаров: ${rawItems.length}`);
+    if (missingCategoryCount > 0) {
+      console.warn(`[diag] У ${missingCategoryCount} товаров пустое поле category - они не попадут ни в одну категорию.`);
+    }
+    if (missingImgCount > 0) {
+      console.warn(`[diag] У ${missingImgCount} товаров пустое поле img.`);
+    }
+    if (rawItems[0]) {
+      console.log("[diag] Пример товара:", rawItems[0]);
+    }
   }
 
-  // Динамическое дерево категорий, строящееся на основе загруженных из Firestore товаров
   let categories = [];
 
   function buildCategories() {
     const tempMap = {};
-    
+
     rawItems.forEach(item => {
       if (!item.category) return;
-      
-      // Приводим название к красивому регистру (первая буква заглавная)
+
       const catNameFormatted = item.category.charAt(0).toUpperCase() + item.category.slice(1);
       const catId = item.category;
 
@@ -424,7 +487,6 @@ const db = getFirestore(app);
 
     categories = Object.values(tempMap).map(cat => {
       const subsArray = Array.from(cat.subsSet).sort();
-      // Если у категории есть подкатегории, добавляем дефолтный пункт "Все ..." в начало списка подкатегорий
       if (subsArray.length > 0) {
         subsArray.unshift(`Все ${cat.name.toLowerCase()}`);
       }
@@ -434,6 +496,8 @@ const db = getFirestore(app);
         subs: subsArray
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
+
+    console.log(`[diag] Построено категорий: ${categories.length}`, categories.map(c => c.name));
   }
 
   let activeCategory = "все товары";
@@ -456,12 +520,12 @@ const db = getFirestore(app);
 
   function renderCategories(){
     const list = document.getElementById("categoryList");
-    
+
     list.innerHTML = categories.map(cat => {
       const count = countFor(cat.name);
       const isActive = cat.name.toLowerCase() === activeCategory;
       const hasSubs = cat.subs.length > 0;
-      
+
       let subsHtml = "";
       if (hasSubs) {
         subsHtml = cat.subs.map(sub => {
@@ -493,7 +557,6 @@ const db = getFirestore(app);
         </div>`;
     }).join("");
 
-    // Вешаем логику событий
     list.querySelectorAll(".cat").forEach(el => {
       const catBtn = el.querySelector(".cat-btn");
       const catName = el.dataset.cat;
@@ -502,36 +565,31 @@ const db = getFirestore(app);
 
       catBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        
+
         if (hasSubs) {
-          // КАТЕГОРИИ С ПОДКАТЕГОРИЯМИ (АККОРДЕОН)
           const isOpen = el.classList.contains("open");
-          
-          // Закрываем все другие аккордеоны
+
           list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
 
           if (!isOpen) {
             el.classList.add("open");
-            
-            // Активируем категорию и сбрасываем подкатегорию на "Все..." по умолчанию
+
             activeCategory = catName;
             activeSubcategory = "";
             currentPage = 1;
-            
+
             list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
             document.getElementById("allGoodsBtn").classList.remove("active");
             el.classList.add("active");
-            
+
             document.getElementById("activeCatName").textContent = targetCategoryData.name;
             renderGrid();
           } else {
             el.classList.remove("open");
           }
         } else {
-          // КАТЕГОРИИ БЕЗ ПОДКАТЕГОРИЙ (Клик сразу фильтрует!)
-          // Сворачиваем все открытые аккордеоны
           list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
-          
+
           activeCategory = catName;
           activeSubcategory = "";
           currentPage = 1;
@@ -546,27 +604,25 @@ const db = getFirestore(app);
         }
       });
 
-      // События клика на подкатегории
       if (hasSubs) {
         el.querySelectorAll(".subcat-btn").forEach(subBtn => {
           subBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const subName = subBtn.dataset.sub;
-            
+
             activeCategory = catName;
             activeSubcategory = subName;
             currentPage = 1;
 
             list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
             el.classList.add("active");
-            
+
             el.querySelectorAll(".subcat-btn").forEach(b => b.classList.remove("active"));
             subBtn.classList.add("active");
 
-            // Название для крошек без счетчика в скобках
             const subCleanText = subBtn.textContent.trim().split(' (')[0];
             document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
-            
+
             renderGrid();
             closeSidebarMobile();
           });
@@ -575,21 +631,20 @@ const db = getFirestore(app);
     });
   }
 
-  // Настройка кнопки "Все товары"
   const allGoodsBtn = document.getElementById("allGoodsBtn");
-  
+
   allGoodsBtn.addEventListener("click", () => {
     document.querySelectorAll("#categoryList .cat").forEach(c => {
       c.classList.remove("open");
       c.classList.remove("active");
     });
-    
+
     allGoodsBtn.classList.add("active");
     activeCategory = "все товары";
     activeSubcategory = "";
     currentPage = 1;
     document.getElementById("activeCatName").textContent = "Все товары";
-    
+
     renderGrid();
     closeSidebarMobile();
   });
@@ -631,7 +686,14 @@ const db = getFirestore(app);
     grid.innerHTML = pageItems.map(item => `
       <div class="card">
         <div class="card-img">
-          <img src="${item.img}" alt="${item.sku}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:11px;color:#666\\'>нет фото</span>'">
+          <img
+            src="${firstImagePath(item.img)}"
+            alt="${item.sku}"
+            loading="lazy"
+            data-try-index="0"
+            data-filename="${item.img}"
+            onerror="window.__handleImgError(this, this.dataset.filename)"
+          >
         </div>
         <div class="card-body">
           <div class="card-sku">${item.sku}</div>
@@ -666,7 +728,6 @@ const db = getFirestore(app);
     });
   }
 
-  // Search
   document.getElementById("searchInput").addEventListener("input", (e) => {
     searchTerm = e.target.value.trim();
     currentPage = 1;
@@ -679,7 +740,6 @@ const db = getFirestore(app);
     document.querySelector(".main").scrollIntoView({behavior:"smooth"});
   });
 
-  // Mobile sidebar
   const burgerBtn = document.getElementById("burgerBtn");
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
@@ -706,10 +766,14 @@ const db = getFirestore(app);
   overlay.addEventListener("click", closeSidebarMobile);
 
   // Init
-  await loadProducts();
-  buildCategories();
-  renderCategories();
-  renderGrid();
+  try {
+    await loadProducts();
+    buildCategories();
+    renderCategories();
+    renderGrid();
+  } catch (err) {
+    console.error("[diag] Ошибка инициализации каталога:", err);
+  }
 })();
 </script>
 
