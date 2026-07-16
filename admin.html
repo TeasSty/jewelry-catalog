@@ -285,51 +285,93 @@
   });
 
   // Функция вывода последних добавленных товаров с подпиской на изменения (onSnapshot)
-  function initRecentList() {
-    const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(10));
-    
-    unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
-      const tbody = document.getElementById("recentProductsTable");
-      if (snapshot.empty) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
-        return;
-      }
+function initRecentList() {
+  const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(20));
+  
+  unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
+    const tbody = document.getElementById("recentProductsTable");
+    if (snapshot.empty) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
+      return;
+    }
 
-      let html = "";
-      snapshot.forEach((docSnap) => {
-        const item = docSnap.data();
-        html += `
-          <tr>
-            <td><strong>${item.sku || ""}</strong></td>
-            <td>${item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
-            <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
-            <td><span style="font-size: 11px; color: #86868b;">${item.img || "—"}</span></td>
-            <td>
-              <button class="delete-btn" data-sku="${item.sku}">Удалить</button>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-
-      // Навешиваем обработчики на кнопки удаления
-      tbody.querySelectorAll(".delete-btn").forEach(btn => {
-        btn.addEventListener("click", async (e) => {
-          const skuToDelete = e.target.dataset.sku;
-          if (confirm(`Вы уверены, что хотите безвозвратно удалить товар ${skuToDelete}?`)) {
-            try {
-              await deleteDoc(doc(db, "products", skuToDelete));
-              alert(`Товар ${skuToDelete} удален.`);
-            } catch (err) {
-              alert("Ошибка при удалении: " + err.message);
-            }
-          }
-        });
-      });
-    }, (error) => {
-      console.error("Ошибка при получении списка товаров: ", error);
+    let html = "";
+    snapshot.forEach((docSnap) => {
+      const item = docSnap.data();
+      // Сохраняем все данные в data-* атрибуты строки для быстрого редактирования без запросов к БД
+      html += `
+        <tr id="row-${item.sku}" 
+            data-sku="${item.sku || ""}" 
+            data-weight="${item.weight || ""}" 
+            data-category="${item.category || ""}" 
+            data-subcategory="${item.subcategory || ""}" 
+            data-img="${item.img || ""}">
+          <td><strong>${item.sku || ""}</strong></td>
+          <td>${item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
+          <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
+          <td><span style="font-size: 11px; color: #86868b;">${item.img || "—"}</span></td>
+          <td>
+            <button class="edit-btn" style="background:#34c759; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:none; margin-right:4px;">Редактировать</button>
+            <button class="delete-btn" data-sku="${item.sku}">Удалить</button>
+          </td>
+        </tr>
+      `;
     });
-  }
+    tbody.innerHTML = html;
+
+    // ОБРАБОТЧИК КНОПКИ РЕДАКТИРОВАНИЯ
+    tbody.querySelectorAll(".edit-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const row = e.target.closest("tr");
+        
+        // Извлекаем данные из дата-атрибутов строки таблицы
+        const sku = row.dataset.sku;
+        const weight = row.dataset.weight;
+        const category = row.dataset.category;
+        const subcategory = row.dataset.subcategory;
+        let img = row.dataset.img;
+
+        // Отрезаем "images/", если он есть, чтобы админу было удобно видеть чистое имя файла
+        if (img && img.startsWith("images/")) {
+          img = img.replace("images/", "");
+        }
+
+        // Заполняем форму
+        document.getElementById("sku").value = sku;
+        document.getElementById("weight").value = weight;
+        document.getElementById("category").value = category;
+        
+        // Триггерим событие изменения категории, чтобы обновить список подкатегорий
+        const event = new Event('change');
+        document.getElementById("category").dispatchEvent(event);
+        
+        // Устанавливаем подкатегорию после обновления списка
+        document.getElementById("subcategory").value = subcategory;
+        document.getElementById("imageName").value = img;
+
+        // Скроллим к форме и подсвечиваем SKU
+        document.getElementById("productForm").scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("weight").focus(); // Фокус на вес, так как SKU менять обычно не нужно
+      });
+    });
+
+    // Обработчик удаления (остается прежним)
+    tbody.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const skuToDelete = e.target.dataset.sku;
+        if (confirm(`Вы уверены, что хотите безвозвратно удалить товар ${skuToDelete}?`)) {
+          try {
+            await deleteDoc(doc(db, "products", skuToDelete));
+          } catch (err) {
+            alert("Ошибка при удалении: " + err.message);
+          }
+        }
+      });
+    });
+  }, (error) => {
+    console.error("Ошибка при получении списка товаров: ", error);
+  });
+}
 </script>
 </body>
 </html>
