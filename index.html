@@ -43,7 +43,6 @@
     border-bottom:1px solid var(--line);
   }
   
-  /* Логотип по твоему скриншоту */
   .logo{
     display:flex;
     flex-direction:column;
@@ -124,7 +123,6 @@
   .cat.open .cat-btn .arrow{transform:rotate(180deg);}
   .cat.active > .cat-btn{color:var(--accent);font-weight:600;}
   
-  /* Плавное открытие панели подкатегорий */
   .cat-panel{
     max-height:0;
     overflow:hidden;
@@ -140,7 +138,6 @@
     gap: 8px;
   }
 
-  /* Стили подкатегорий */
   .subcat-btn {
     background: none;
     border: none;
@@ -160,7 +157,6 @@
     font-weight: 600;
   }
 
-  /* Кнопка "Все товары" сверху */
   .all-goods-btn {
     width: 100%;
     padding: 14px 4px;
@@ -220,7 +216,6 @@
     text-align:center;padding:60px 20px;color:var(--text-dim);font-size:14px;
   }
 
-  /* ===== СТИЛИ ДЛЯ ИНДИКАТОРА ЗАГРУЗКИ И ОШИБОК ===== */
   .loader-container {
     display: flex;
     flex-direction: column;
@@ -376,13 +371,11 @@
       <div class="result-count" id="resultCount">Загрузка...</div>
     </div>
 
-    <!-- Индикатор загрузки по умолчанию вставлен прямо в сетку -->
     <div id="loadingState" class="loader-container">
       <div class="spinner"></div>
       <p>Загрузка каталога изделий...</p>
     </div>
 
-    <!-- Блок вывода ошибки подключения -->
     <div id="errorState" class="error-container" style="display:none;">
       <h3>Ошибка подключения к базе данных</h3>
       <p style="margin-top:6px; font-size:14px; opacity:0.8;">Не удалось загрузить каталог товаров. Проверьте интернет-соединение или попробуйте позже.</p>
@@ -416,33 +409,28 @@
   </a>
 </nav>
 
-<!-- Подключение Firebase Modular SDK v10 -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // Настройки твоего Firebase-проекта
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
     authDomain: "voronin-jewelry.firebaseapp.com",
     projectId: "voronin-jewelry",
-    storageBucket: "voronin-jewelry.firebasestorage.app",
     messagingSenderId: "1067796651938",
     appId: "1:1067796651938:web:3d89a194660765b4869cfb",
     measurementId: "G-FJ9Z8C6YG"
   };
 
-  // Инициализируем приложение и базу данных
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  const IMG_BASE = "https://воронинкострома.рф/files/items/";
+  // Теперь изображения берутся локально из папки проекта /images/ (или из репозитория после деплоя)
+  const IMG_BASE = ""; 
   const PER_PAGE = 20;
 
-  // Глобальное хранилище загруженных товаров (заменяет старый жестко прописанный rawItems)
   let rawItems = [];
 
-  // Структура категорий
   const categories = [
     { id: "koltsa", name: "Кольца", subs: ["Все кольца", "Классические", "Помолвочные"] },
     { id: "obruch", name: "Обручальные", subs: ["Все обручальные", "Гладкие", "С алмазной гранью"] },
@@ -465,22 +453,28 @@
   let searchTerm = "";
   let currentPage = 1;
 
-  // Запуск загрузки данных из Firestore при старте страницы
   async function loadCatalogFromFirestore() {
     const loadingState = document.getElementById("loadingState");
     const errorState = document.getElementById("errorState");
     const productGrid = document.getElementById("productGrid");
 
     try {
-      // Запрашиваем коллекцию products с сортировкой по дате добавления (или по артикулу, если даты нет)
       const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(productsQuery);
       
       const loadedProducts = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        
+        // Корректная обработка сохраненного пути. 
+        // Если путь уже содержит "images/", оставляем, если это просто имя файла — дописываем.
+        let imagePath = data.img || "";
+        if (imagePath && !imagePath.startsWith("images/")) {
+          imagePath = "images/" + imagePath;
+        }
+
         loadedProducts.push({
-          img: IMG_BASE + data.img,
+          img: IMG_BASE + imagePath,
           sku: data.sku,
           weight: data.weight,
           category: (data.category || "").toLowerCase(),
@@ -489,11 +483,7 @@
       });
 
       rawItems = loadedProducts;
-
-      // Скрываем загрузчик
       loadingState.style.display = "none";
-
-      // Инициализируем интерфейс
       initCatalogInterface();
 
     } catch (error) {
@@ -504,7 +494,6 @@
     }
   }
 
-  // Расчет количества товаров в категории / подкатегории
   function countFor(catName, subcatName = "") {
     if (catName.toLowerCase() === "все товары") {
       return rawItems.length;
@@ -518,7 +507,6 @@
     return rawItems.filter(i => i.category === catName.toLowerCase()).length;
   }
 
-  // Сборка бокового меню категорий
   function renderCategories(){
     const list = document.getElementById("categoryList");
     
@@ -561,7 +549,6 @@
     setupCategoryListeners(list);
   }
 
-  // Слушатели событий для категорий и подкатегорий
   function setupCategoryListeners(list) {
     list.querySelectorAll(".cat").forEach(el => {
       const catBtn = el.querySelector(".cat-btn");
@@ -634,7 +621,6 @@
     });
   }
 
-  // Фильтрация товаров по активным критериям поиска и категорий
   function getFiltered(){
     return rawItems.filter(item => {
       const inCategory = activeCategory === "все товары" || item.category === activeCategory;
@@ -647,7 +633,6 @@
     });
   }
 
-  // Отрисовка сетки карточек
   function renderGrid(){
     const filtered = getFiltered();
     const grid = document.getElementById("productGrid");
@@ -684,7 +669,6 @@
     renderPagination(totalPages);
   }
 
-  // Отрисовка пагинации
   function renderPagination(totalPages){
     const pagination = document.getElementById("pagination");
     if(totalPages <= 1){ pagination.innerHTML = ""; return; }
@@ -708,9 +692,7 @@
     });
   }
 
-  // Навешивание событий на элементы интерфейса после загрузки из БД
   function initCatalogInterface() {
-    // Счетчик на кнопке "Все товары"
     const allGoodsBtn = document.getElementById("allGoodsBtn");
     document.getElementById("allGoodsCount").textContent = rawItems.length;
     
@@ -730,7 +712,6 @@
       closeSidebarMobile();
     });
 
-    // Обработчик текстового поиска по артикулу
     document.getElementById("searchInput").addEventListener("input", (e) => {
       searchTerm = e.target.value.trim();
       currentPage = 1;
@@ -743,12 +724,10 @@
       document.querySelector(".main").scrollIntoView({behavior:"smooth"});
     });
 
-    // Первоначальный рендер
     renderCategories();
     renderGrid();
   }
 
-  // Мобильное меню и боковая панель (сайдбар)
   const burgerBtn = document.getElementById("burgerBtn");
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
@@ -774,7 +753,6 @@
   });
   overlay.addEventListener("click", closeSidebarMobile);
 
-  // Старт работы при открытии страницы
   loadCatalogFromFirestore();
 </script>
 
