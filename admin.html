@@ -4,764 +4,290 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Админ-панель — ИП Воронин</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#1a1a1a;
-    --bg-raised:#232323;
-    --bg-raised-2:#2a2a2a;
-    --line:#3a3a3a;
-    --text:#e0e0e0;
-    --text-dim:#9a9a9a;
+    --bg:#141414;
+    --bg-card:#1f1f1f;
+    --line:#2d2d2d;
+    --text:#f5f5f5;
+    --text-dim:#858585;
     --accent:#c9a24b;
-    --accent-dim:#8f7736;
-    --danger:#c15c4a;
-    --danger-dim:#8a4234;
+    --danger:#e53935;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{
     background:var(--bg);
     color:var(--text);
-    font-family:'Inter',system-ui,sans-serif;
-    line-height:1.5;
-    -webkit-font-smoothing:antialiased;
-    min-height:100vh;
+    font-family:'Inter',sans-serif;
+    padding:40px 20px;
   }
-  a{color:inherit;}
-  button{font-family:inherit;}
-  input{font-family:inherit;}
-  img{max-width:100%;display:block;}
-
-  .logo{display:flex;flex-direction:column;line-height:1.15;text-align:left;}
-  .logo-main{font-weight:900;font-size:20px;letter-spacing:.02em;color:#ffffff;text-transform:uppercase;}
-  .logo-sub{font-size:9.5px;font-weight:600;letter-spacing:.18em;color:#8a8a8a;text-transform:uppercase;margin-top:4px;}
-
-  /* ===== BUTTONS ===== */
-  .btn-primary{
-    background:var(--accent-dim);color:#1a1a1a;border:none;border-radius:6px;
-    padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;
+  .container{max-width:600px;margin:0 auto;}
+  h1{font-size:24px;margin-bottom:24px;font-weight:700;}
+  .card{
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:28px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.3);
   }
-  .btn-primary:hover{background:var(--accent);}
-  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
-  .btn-secondary{
-    background:var(--bg-raised-2);color:var(--text);border:1px solid var(--line);border-radius:6px;
-    padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer;transition:border-color .15s, color .15s;
+  .form-group{margin-bottom:20px;}
+  label{display:block;font-size:13px;color:var(--text-dim);margin-bottom:8px;font-weight:500;}
+  input, select{
+    width:100%;
+    background:#292929;
+    border:1px solid var(--line);
+    color:#fff;
+    padding:12px 14px;
+    border-radius:6px;
+    font-size:14px;
+    outline:none;
+    font-family:inherit;
   }
-  .btn-secondary:hover{border-color:var(--accent-dim);color:var(--accent);}
-  .btn-danger-outline{
-    background:none;color:var(--danger);border:1px solid var(--danger-dim);border-radius:6px;
-    padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;
+  input:focus, select:focus{border-color:var(--accent);}
+  .hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    display: block;
   }
-  .btn-danger-outline:hover{background:var(--danger-dim);color:#fff;}
-  .icon-btn{
-    background:none;border:1px solid var(--line);color:var(--text-dim);border-radius:6px;
-    padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;margin-right:6px;transition:.15s;
-    white-space:nowrap;
+  button.submit-btn{
+    width:100%;
+    background:var(--accent);
+    color:#141414;
+    border:none;
+    padding:14px;
+    border-radius:6px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    transition:opacity 0.2s;
+    margin-top:10px;
   }
-  .icon-btn:hover{border-color:var(--accent-dim);color:var(--accent);}
-  .icon-btn.delete-btn:hover{border-color:var(--danger-dim);color:var(--danger);}
-
-  /* ===== LOGIN ===== */
-  .login-screen{
-    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
-    background:radial-gradient(ellipse at top, rgba(201,162,75,.08), transparent 60%), var(--bg);
+  button.submit-btn:hover{opacity:0.9;}
+  button.submit-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .status{
+    margin-top:16px;
+    padding:12px;
+    border-radius:6px;
+    font-size:14px;
+    display:none;
+    text-align:center;
   }
-  .login-box{
-    width:100%;max-width:360px;background:var(--bg-raised);border:1px solid var(--line);
-    border-radius:10px;padding:34px 30px;text-align:center;
+  .status.success{background:rgba(76,175,80,0.1);color:#4caf50;border:1px solid rgba(76,175,80,0.3);}
+  .status.error{background:rgba(229,57,53,0.1);color:var(--danger);border:1px solid rgba(229,57,53,0.3);}
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    float: right;
+    margin-top: -50px;
   }
-  .login-box .logo{align-items:center;text-align:center;margin-bottom:22px;}
-  .login-box h1{font-size:18px;font-weight:700;margin-bottom:22px;}
-  .login-box form{display:flex;flex-direction:column;gap:12px;text-align:left;}
-  .login-box label{font-size:12px;color:var(--text-dim);font-weight:600;letter-spacing:.03em;}
-  .login-box input{
-    width:100%;background:var(--bg-raised-2);border:1px solid var(--line);color:var(--text);
-    padding:11px 14px;border-radius:6px;font-size:14px;outline:none;margin-top:4px;
-  }
-  .login-box input:focus{border-color:var(--accent-dim);}
-  .login-box button{margin-top:10px;}
-  .login-error{color:var(--danger);font-size:13px;min-height:18px;}
-
-  /* ===== ADMIN SHELL ===== */
-  .admin-nav{
-    position:sticky;top:0;z-index:50;height:70px;display:flex;align-items:center;justify-content:space-between;
-    padding:0 28px;background:rgba(26,26,26,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
-  }
-  .admin-nav-actions{display:flex;align-items:center;gap:16px;}
-  #userEmail{font-size:13px;color:var(--text-dim);}
-  .admin-main{max-width:1200px;margin:0 auto;padding:30px 28px 60px;}
-  .admin-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:24px;}
-  .admin-toolbar h1{font-size:22px;font-weight:800;}
-  .admin-toolbar-actions{display:flex;gap:12px;flex-wrap:wrap;}
-
-  /* ===== TABLE ===== */
-  .table-wrap{background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;overflow:hidden;overflow-x:auto;}
-  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px;}
-  thead th{
-    text-align:left;padding:14px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
-    color:var(--text-dim);border-bottom:1px solid var(--line);background:var(--bg-raised-2);
-  }
-  tbody td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:middle;}
-  tbody tr:last-child td{border-bottom:none;}
-  tbody tr:hover{background:rgba(255,255,255,.02);}
-  .thumb{
-    width:48px;height:48px;border-radius:6px;overflow:hidden;background:var(--bg-raised-2);
-    display:flex;align-items:center;justify-content:center;
-  }
-  .thumb img{width:100%;height:100%;object-fit:cover;}
-  .row-actions{white-space:nowrap;}
-  .empty{text-align:center;padding:50px 20px;color:var(--text-dim);font-size:14px;}
-
-  /* ===== MODAL ===== */
-  .modal-overlay{
-    position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);
-    display:flex;align-items:center;justify-content:center;padding:20px;
-    opacity:0;visibility:hidden;transition:opacity .2s ease, visibility .2s ease;
-  }
-  .modal-overlay.show{opacity:1;visibility:visible;}
-  .modal-box{
-    background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;
-    width:100%;max-height:90vh;overflow:auto;position:relative;padding:28px;
-    transform:scale(.97);transition:transform .2s ease;
-  }
-  .modal-overlay.show .modal-box{transform:scale(1);}
-  .form-box{max-width:420px;}
-  .bulk-box{max-width:820px;}
-  .modal-close{
-    position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;
-    background:var(--bg-raised-2);border:1px solid var(--line);color:var(--text);
-    cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;
-  }
-  .modal-close:hover{border-color:var(--accent-dim);color:var(--accent);}
-  .modal-box h2{font-size:18px;font-weight:700;margin-bottom:20px;}
-
-  /* ===== FORM ===== */
-  #productForm{display:flex;flex-direction:column;gap:12px;}
-  #productForm label{font-size:12px;color:var(--text-dim);font-weight:600;letter-spacing:.03em;margin-top:4px;}
-  #productForm input[type="text"]{
-    background:var(--bg-raised-2);border:1px solid var(--line);color:var(--text);
-    padding:11px 14px;border-radius:6px;font-size:14px;outline:none;
-  }
-  #productForm input[type="text"]:focus{border-color:var(--accent-dim);}
-  #productForm input[type="file"]{
-    font-size:13px;color:var(--text-dim);
-  }
-  .form-preview-wrap{
-    aspect-ratio:1/1;max-width:160px;background:var(--bg-raised-2);border:1px solid var(--line);
-    border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;
-  }
-  .form-preview-wrap img{width:100%;height:100%;object-fit:cover;}
-  .form-status{font-size:13px;color:var(--text-dim);min-height:18px;}
-
-  /* ===== BULK UPLOAD ===== */
-  #bulkFileInput{margin-bottom:16px;font-size:13px;color:var(--text-dim);}
-  .bulk-list{display:flex;flex-direction:column;gap:10px;max-height:50vh;overflow-y:auto;margin-bottom:16px;}
-  .bulk-row{
-    display:grid;grid-template-columns:52px 1fr 1fr 1fr 1fr auto;gap:8px;align-items:center;
-    background:var(--bg-raised-2);border:1px solid var(--line);border-radius:8px;padding:8px;
-  }
-  .bulk-thumb{width:44px;height:44px;object-fit:cover;border-radius:5px;background:var(--bg);}
-  .bulk-row input{
-    background:var(--bg);border:1px solid var(--line);color:var(--text);
-    padding:8px 10px;border-radius:5px;font-size:13px;outline:none;width:100%;
-  }
-  .bulk-row input:focus{border-color:var(--accent-dim);}
-  .bulk-remove{
-    background:none;border:1px solid var(--line);color:var(--text-dim);border-radius:5px;
-    width:30px;height:30px;cursor:pointer;font-size:13px;
-  }
-  .bulk-remove:hover{border-color:var(--danger-dim);color:var(--danger);}
-
-  @media (max-width:720px){
-    .bulk-row{grid-template-columns:1fr;}
-    .bulk-thumb{width:100%;height:120px;}
-  }
-  @media (max-width:600px){
-    .admin-nav{padding:0 16px;}
-    .admin-main{padding:22px 16px 50px;}
-  }
+  .logout-btn:hover { color:#fff; border-color:#fff; }
+  #authContainer { max-width: 400px; margin: 100px auto; }
 </style>
 </head>
 <body>
 
-<!-- ===== LOGIN SCREEN ===== -->
-<div class="login-screen" id="loginScreen">
-  <div class="login-box">
-    <div class="logo">
-      <div class="logo-main">ИП ВОРОНИН</div>
-      <div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
-    </div>
-    <h1>Вход в админ-панель</h1>
-    <form id="loginForm">
-      <div>
-        <label for="loginEmail">Email</label>
-        <input type="email" id="loginEmail" autocomplete="username" required>
-      </div>
-      <div>
-        <label for="loginPassword">Пароль</label>
-        <input type="password" id="loginPassword" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn-primary">Войти</button>
-      <div class="login-error" id="loginError"></div>
-    </form>
+<!-- ОКНО АВТОРИЗАЦИИ -->
+<div id="authContainer" class="card">
+  <h1 style="text-align:center;">Вход в админку</h1>
+  <div class="form-group">
+    <label>Email</label>
+    <input type="email" id="authEmail" placeholder="admin@example.com">
   </div>
+  <div class="form-group">
+    <label>Пароль</label>
+    <input type="password" id="authPassword" placeholder="••••••••">
+  </div>
+  <button class="submit-btn" id="loginBtn">Войти</button>
+  <div id="authStatus" class="status error"></div>
 </div>
 
-<!-- ===== ADMIN SCREEN ===== -->
-<div class="admin-screen" id="adminScreen" style="display:none;">
-  <nav class="admin-nav">
-    <div class="logo">
-      <div class="logo-main">ИП ВОРОНИН</div>
-      <div class="logo-sub">АДМИН-ПАНЕЛЬ</div>
-    </div>
-    <div class="admin-nav-actions">
-      <span id="userEmail"></span>
-      <button class="btn-secondary" id="logoutBtn">Выйти</button>
-    </div>
-  </nav>
-
-  <main class="admin-main">
-    <div class="admin-toolbar">
-      <h1>Товары</h1>
-      <div class="admin-toolbar-actions">
-        <button class="btn-secondary" id="bulkUploadBtn">Массовая загрузка</button>
-        <button class="btn-primary" id="addProductBtn">+ Добавить изделие</button>
-      </div>
-    </div>
-
-    <div class="table-wrap">
-      <table id="productsTable">
-        <thead>
-          <tr>
-            <th>Фото</th>
-            <th>Артикул</th>
-            <th>Вес</th>
-            <th>Категория</th>
-            <th>Подкатегория</th>
-            <th>Добавлено</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="productsTbody"></tbody>
-      </table>
-      <div class="empty" id="tableEmpty" style="display:none;">Пока нет ни одного изделия. Нажмите «Добавить изделие».</div>
-    </div>
-  </main>
-</div>
-
-<!-- ===== PRODUCT FORM MODAL (add / edit) ===== -->
-<div class="modal-overlay" id="productFormModal">
-  <div class="modal-box form-box">
-    <button class="modal-close" id="formCloseBtn" aria-label="Закрыть">✕</button>
-    <h2 id="formTitle">Добавить изделие</h2>
+<!-- ОСНОВНОЙ ИНТЕРФЕЙС ДОБАВЛЕНИЯ ТОВАРА -->
+<div class="container" id="adminInterface" style="display:none;">
+  <button class="logout-btn" id="logoutBtn">Выйти</button>
+  <h1>Добавление изделия в каталог</h1>
+  
+  <div class="card">
     <form id="productForm">
-      <label for="formImageInput">Фото</label>
-      <input type="file" id="formImageInput" accept="image/*">
-      <div class="form-preview-wrap"><img id="formPreview" style="display:none;" alt=""></div>
+      <div class="form-group">
+        <label>Артикул (SKU)</label>
+        <input type="text" id="sku" placeholder="Например: КП-141" required>
+      </div>
 
-      <label for="formSku">Артикул</label>
-      <input type="text" id="formSku" required>
+      <div class="form-group">
+        <label>Вес изделия (граммы)</label>
+        <input type="text" id="weight" placeholder="Например: 2.45" required>
+      </div>
 
-      <label for="formWeight">Вес (г)</label>
-      <input type="text" id="formWeight" required inputmode="decimal">
+      <div class="form-group">
+        <label>Основная категория</label>
+        <select id="category" required>
+          <option value="">Выберите категорию...</option>
+          <option value="Кольца">Кольца</option>
+          <option value="Обручальные">Обручальные</option>
+          <option value="Серьги">Серьги</option>
+          <option value="Гарнитуры">Гарнитуры</option>
+          <option value="Подвески">Подвески</option>
+          <option value="Колье">Колье</option>
+          <option value="Браслеты">Браслеты</option>
+          <option value="Пирсинг">Пирсинг</option>
+          <option value="Цепи/Браслеты (ручная работа)">Цепи/Браслеты (ручная работа)</option>
+          <option value="Ложки">Ложки</option>
+          <option value="Броши">Броши</option>
+          <option value="Православные">Православные</option>
+          <option value="Восток">Восток</option>
+          <option value="Разное">Разное</option>
+        </select>
+      </div>
 
-      <label for="formCategory">Категория</label>
-      <input type="text" id="formCategory" required list="categoryOptions">
-      <datalist id="categoryOptions"></datalist>
+      <div class="form-group">
+        <label>Подкатегория (необязательно)</label>
+        <select id="subcategory">
+          <option value="">Без подкатегории</option>
+        </select>
+      </div>
 
-      <label for="formSubcategory">Подкатегория</label>
-      <input type="text" id="formSubcategory" list="subcategoryOptions">
-      <datalist id="subcategoryOptions"></datalist>
+      <div class="form-group">
+        <label>Имя файла фотографии</label>
+        <!-- Текстовое поле вместо загрузчика файлов. Не тратит платный трафик. -->
+        <input type="text" id="imageName" placeholder="Например: kp-141.jpg" required>
+        <span class="hint">Вручную поместите этот файл в папку <b>images/</b> вашего проекта перед деплоем.</span>
+      </div>
 
-      <button type="submit" class="btn-primary" id="formSubmitBtn">Сохранить</button>
-      <div class="form-status" id="formStatus"></div>
+      <button type="submit" class="submit-btn" id="submitBtn">Сохранить в Firestore</button>
     </form>
-  </div>
-</div>
 
-<!-- ===== BULK UPLOAD MODAL ===== -->
-<div class="modal-overlay" id="bulkModal">
-  <div class="modal-box bulk-box">
-    <button class="modal-close" id="bulkCloseBtn" aria-label="Закрыть">✕</button>
-    <h2>Массовая загрузка изделий</h2>
-    <input type="file" id="bulkFileInput" accept="image/*" multiple>
-    <div class="bulk-list" id="bulkList"></div>
-    <button class="btn-primary" id="bulkSaveBtn">Сохранить все</button>
-    <div class="form-status" id="bulkStatus"></div>
+    <div id="statusMessage" class="status"></div>
   </div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import {
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// Тот же проект Firebase, что и в каталоге (index.html) - не создаём новый.
-const firebaseConfig = {
-  apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
-  authDomain: "voronin-jewelry.firebaseapp.com",
-  projectId: "voronin-jewelry",
-  storageBucket: "voronin-jewelry.firebasestorage.app",
-  messagingSenderId: "1067796651938",
-  appId: "1:1067796651938:web:3d89a194660765b4869cfb",
-  measurementId: "G-FJ9Z8C6YG"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-// ===== DOM =====
-const loginScreen = document.getElementById("loginScreen");
-const adminScreen = document.getElementById("adminScreen");
-const loginForm = document.getElementById("loginForm");
-const loginEmail = document.getElementById("loginEmail");
-const loginPassword = document.getElementById("loginPassword");
-const loginError = document.getElementById("loginError");
-const logoutBtn = document.getElementById("logoutBtn");
-const userEmailEl = document.getElementById("userEmail");
-
-const productsTbody = document.getElementById("productsTbody");
-const tableEmpty = document.getElementById("tableEmpty");
-
-const addProductBtn = document.getElementById("addProductBtn");
-const productFormModal = document.getElementById("productFormModal");
-const formCloseBtn = document.getElementById("formCloseBtn");
-const formTitle = document.getElementById("formTitle");
-const productForm = document.getElementById("productForm");
-const formImageInput = document.getElementById("formImageInput");
-const formPreview = document.getElementById("formPreview");
-const formSku = document.getElementById("formSku");
-const formWeight = document.getElementById("formWeight");
-const formCategory = document.getElementById("formCategory");
-const formSubcategory = document.getElementById("formSubcategory");
-const formSubmitBtn = document.getElementById("formSubmitBtn");
-const formStatus = document.getElementById("formStatus");
-const categoryOptions = document.getElementById("categoryOptions");
-const subcategoryOptions = document.getElementById("subcategoryOptions");
-
-const bulkUploadBtn = document.getElementById("bulkUploadBtn");
-const bulkModal = document.getElementById("bulkModal");
-const bulkCloseBtn = document.getElementById("bulkCloseBtn");
-const bulkFileInput = document.getElementById("bulkFileInput");
-const bulkList = document.getElementById("bulkList");
-const bulkSaveBtn = document.getElementById("bulkSaveBtn");
-const bulkStatus = document.getElementById("bulkStatus");
-
-// ===== AUTH =====
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    loginScreen.style.display = "none";
-    adminScreen.style.display = "block";
-    userEmailEl.textContent = user.email;
-    loadProducts();
-  } else {
-    loginScreen.style.display = "flex";
-    adminScreen.style.display = "none";
-  }
-});
-
-loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  loginError.textContent = "";
-  try {
-    await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
-  } catch (err) {
-    console.error(err);
-    loginError.textContent = "Неверный email или пароль.";
-  }
-});
-
-logoutBtn.addEventListener("click", () => signOut(auth));
-
-// ===== HELPERS =====
-function escapeHtml(str) {
-  return String(str ?? "").replace(/[&<>"']/g, (m) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[m]));
-}
-
-function formatDate(date) {
-  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }) +
-    " " + date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-}
-
-// Уменьшает изображение до ширины ~1200px и конвертирует в JPEG качеством ~0.85,
-// как требуется в ТЗ (п.4), чтобы не грузить в Storage тяжёлые фото "как есть".
-function resizeImage(file, maxWidth = 1200, quality = 0.85) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Не удалось декодировать изображение"));
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxWidth) {
-          height = Math.round(height * (maxWidth / width));
-          width = maxWidth;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          if (!blob) { reject(new Error("Не удалось сжать изображение")); return; }
-          resolve(blob);
-        }, "image/jpeg", quality);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-// Загружает Blob в Firebase Storage и возвращает полный download URL.
-async function uploadProductImage(blob) {
-  const filename = `products/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-  const fileRef = ref(storage, filename);
-  await uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
-  return await getDownloadURL(fileRef);
-}
-
-// Удаляет файл из Storage по его download URL. Модульный SDK v10 поддерживает
-// ref(storage, url) с полным https download URL напрямую - отдельный refFromURL не нужен.
-// Если файла уже нет (например, удалён вручную) - не считаем это фатальной ошибкой.
-async function deleteImageByUrl(url) {
-  if (!url || !/^https?:\/\//i.test(url)) return;
-  try {
-    const fileRef = ref(storage, url);
-    await deleteObject(fileRef);
-  } catch (err) {
-    console.warn("Не удалось удалить файл из Storage (возможно, уже удалён):", err);
-  }
-}
-
-// ===== LOAD & RENDER TABLE =====
-let productsCache = [];
-
-async function loadProducts() {
-  // Здесь намеренно НЕ используется query(..., orderBy('createdAt','desc')) на уровне Firestore:
-  // orderBy на сервере молча исключает из результата документы, где поля createdAt вообще нет
-  // (например, товары, добавленные вручную до появления этой админки). Чтобы старые товары
-  // не "пропадали" из таблицы аналогично прежнему багу с категориями, сортировка сделана
-  // на клиенте, а товары без createdAt считаются самыми старыми и просто оказываются внизу.
-  const snap = await getDocs(collection(db, "products"));
-  productsCache = snap.docs.map((d) => {
-    const data = d.data();
-    const createdAtMs = (data.createdAt && typeof data.createdAt.toMillis === "function")
-      ? data.createdAt.toMillis()
-      : 0;
-    return {
-      id: d.id,
-      sku: data.sku || "",
-      weight: data.weight ?? "",
-      category: data.category || "",
-      subcategory: data.subcategory || "",
-      img: data.img || data.image || "",
-      createdAt: data.createdAt || null,
-      createdAtMs
-    };
-  });
-  productsCache.sort((a, b) => b.createdAtMs - a.createdAtMs);
-  renderTable();
-  updateDatalists();
-}
-
-function renderTable() {
-  if (productsCache.length === 0) {
-    productsTbody.innerHTML = "";
-    tableEmpty.style.display = "block";
-    return;
-  }
-  tableEmpty.style.display = "none";
-
-  productsTbody.innerHTML = productsCache.map((p) => `
-    <tr data-id="${p.id}">
-      <td>
-        <div class="thumb">
-          ${p.img ? `<img src="${p.img}" alt="${escapeHtml(p.sku)}" onerror="this.style.display='none'">` : ""}
-        </div>
-      </td>
-      <td>${escapeHtml(p.sku)}</td>
-      <td>${escapeHtml(String(p.weight))} г</td>
-      <td>${escapeHtml(p.category)}</td>
-      <td>${escapeHtml(p.subcategory)}</td>
-      <td>${p.createdAt && typeof p.createdAt.toDate === "function" ? formatDate(p.createdAt.toDate()) : "—"}</td>
-      <td class="row-actions">
-        <button class="icon-btn edit-btn" data-id="${p.id}">Изменить</button>
-        <button class="icon-btn delete-btn" data-id="${p.id}">Удалить</button>
-      </td>
-    </tr>
-  `).join("");
-
-  productsTbody.querySelectorAll(".edit-btn").forEach((btn) => {
-    btn.addEventListener("click", () => openEditForm(btn.dataset.id));
-  });
-  productsTbody.querySelectorAll(".delete-btn").forEach((btn) => {
-    btn.addEventListener("click", () => handleDelete(btn.dataset.id));
-  });
-}
-
-function updateDatalists() {
-  const cats = [...new Set(productsCache.map((p) => p.category).filter(Boolean))].sort();
-  const subs = [...new Set(productsCache.map((p) => p.subcategory).filter(Boolean))].sort();
-  categoryOptions.innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
-  subcategoryOptions.innerHTML = subs.map((s) => `<option value="${escapeHtml(s)}">`).join("");
-}
-
-// ===== ADD / EDIT FORM =====
-let editingId = null;
-let selectedFile = null;
-
-function openAddForm() {
-  editingId = null;
-  selectedFile = null;
-  formTitle.textContent = "Добавить изделие";
-  productForm.reset();
-  formPreview.style.display = "none";
-  formStatus.textContent = "";
-  productFormModal.classList.add("show");
-}
-
-function openEditForm(id) {
-  const p = productsCache.find((x) => x.id === id);
-  if (!p) return;
-  editingId = id;
-  selectedFile = null;
-  formTitle.textContent = "Редактировать изделие";
-  formSku.value = p.sku;
-  formWeight.value = p.weight;
-  formCategory.value = p.category;
-  formSubcategory.value = p.subcategory;
-  formImageInput.value = "";
-  if (p.img) {
-    formPreview.src = p.img;
-    formPreview.style.display = "block";
-  } else {
-    formPreview.style.display = "none";
-  }
-  formStatus.textContent = "";
-  productFormModal.classList.add("show");
-}
-
-function closeProductForm() {
-  productFormModal.classList.remove("show");
-}
-
-formImageInput.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  selectedFile = file;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    formPreview.src = ev.target.result;
-    formPreview.style.display = "block";
+  const firebaseConfig = {
+    apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
+    authDomain: "voronin-jewelry.firebaseapp.com",
+    projectId: "voronin-jewelry",
+    messagingSenderId: "1067796651938",
+    appId: "1:1067796651938:web:3d89a194660765b4869cfb",
+    measurementId: "G-FJ9Z8C6YG"
   };
-  reader.readAsDataURL(file);
-});
 
-addProductBtn.addEventListener("click", openAddForm);
-formCloseBtn.addEventListener("click", closeProductForm);
-productFormModal.addEventListener("click", (e) => {
-  if (e.target === productFormModal) closeProductForm();
-});
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
 
-productForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
+  // Карта соответствия подкатегорий
+  const subcatMap = {
+    "Кольца": ["Классические", "Помолвочные"],
+    "Обручальные": ["Гладкие", "С алмазной гранью"],
+    "Серьги": ["Золотые", "Серебряные"],
+    "Гарнитуры": ["Золотые", "Серебряные"],
+    "Подвески": ["Кресты", "Шармы"],
+    "Колье": ["Золотые", "Серебряные"],
+    "Цепи/Браслеты (ручная работа)": ["Все цепи", "Браслеты"]
+  };
 
-  const sku = formSku.value.trim();
-  const weight = formWeight.value.trim();
-  const category = formCategory.value.trim();
-  const subcategory = formSubcategory.value.trim();
-
-  if (!sku || !weight || !category) {
-    formStatus.textContent = "Заполните артикул, вес и категорию.";
-    return;
-  }
-
-  formSubmitBtn.disabled = true;
-
-  try {
-    const existing = editingId ? productsCache.find((x) => x.id === editingId) : null;
-    let imgUrl = existing ? existing.img : "";
-    const oldImgUrl = imgUrl;
-
-    if (selectedFile) {
-      formStatus.textContent = "Обработка изображения...";
-      const blob = await resizeImage(selectedFile);
-      formStatus.textContent = "Загрузка изображения...";
-      imgUrl = await uploadProductImage(blob);
-    }
-
-    formStatus.textContent = "Сохранение...";
-
-    if (editingId) {
-      await updateDoc(doc(db, "products", editingId), {
-        sku, weight, category, subcategory, img: imgUrl
+  // Переключение списков подкатегорий при выборе категории
+  document.getElementById("category").addEventListener("change", (e) => {
+    const cat = e.target.value;
+    const subSelect = document.getElementById("subcategory");
+    subSelect.innerHTML = '<option value="">Без подкатегории</option>';
+    
+    if(subcatMap[cat]) {
+      subcatMap[cat].forEach(sub => {
+        subSelect.innerHTML += `<option value="${sub}">${sub}</option>`;
       });
-      // Фото поменяли - старый файл в Storage больше не нужен, удаляем его.
-      // Если фото не меняли (selectedFile нет) - imgUrl === oldImgUrl, ничего не удаляем.
-      if (selectedFile && oldImgUrl && oldImgUrl !== imgUrl) {
-        await deleteImageByUrl(oldImgUrl);
-      }
+    }
+  });
+
+  // Отслеживание авторизации
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      document.getElementById("authContainer").style.display = "none";
+      document.getElementById("adminInterface").style.display = "block";
     } else {
-      await addDoc(collection(db, "products"), {
-        sku, weight, category, subcategory, img: imgUrl,
-        createdAt: serverTimestamp()
-      });
+      document.getElementById("authContainer").style.display = "block";
+      document.getElementById("adminInterface").style.display = "none";
     }
-
-    closeProductForm();
-    await loadProducts();
-  } catch (err) {
-    console.error(err);
-    formStatus.textContent = "Ошибка сохранения: " + (err.message || err);
-  } finally {
-    formSubmitBtn.disabled = false;
-  }
-});
-
-// ===== DELETE =====
-async function handleDelete(id) {
-  const p = productsCache.find((x) => x.id === id);
-  if (!p) return;
-  const ok = confirm("Удалить изделие?");
-  if (!ok) return;
-
-  try {
-    await deleteDoc(doc(db, "products", id));
-    if (p.img) await deleteImageByUrl(p.img);
-    await loadProducts();
-  } catch (err) {
-    console.error(err);
-    alert("Не удалось удалить изделие: " + (err.message || err));
-  }
-}
-
-// ===== BULK UPLOAD =====
-let bulkItems = []; // { file, previewUrl, sku, weight, category, subcategory }
-
-bulkUploadBtn.addEventListener("click", () => {
-  bulkItems.forEach((it) => URL.revokeObjectURL(it.previewUrl));
-  bulkItems = [];
-  bulkList.innerHTML = "";
-  bulkFileInput.value = "";
-  bulkStatus.textContent = "";
-  bulkModal.classList.add("show");
-});
-
-bulkCloseBtn.addEventListener("click", () => bulkModal.classList.remove("show"));
-bulkModal.addEventListener("click", (e) => {
-  if (e.target === bulkModal) bulkModal.classList.remove("show");
-});
-
-bulkFileInput.addEventListener("change", (e) => {
-  const files = Array.from(e.target.files);
-  bulkItems = files.map((file) => ({
-    file,
-    previewUrl: URL.createObjectURL(file),
-    sku: "",
-    weight: "",
-    category: "",
-    subcategory: ""
-  }));
-  renderBulkList();
-});
-
-function renderBulkList() {
-  bulkList.innerHTML = bulkItems.map((item, idx) => `
-    <div class="bulk-row" data-idx="${idx}">
-      <img class="bulk-thumb" src="${item.previewUrl}" alt="">
-      <input type="text" class="bulk-sku" placeholder="Артикул" value="${escapeHtml(item.sku)}">
-      <input type="text" class="bulk-weight" placeholder="Вес, г" value="${escapeHtml(item.weight)}">
-      <input type="text" class="bulk-category" placeholder="Категория" value="${escapeHtml(item.category)}" list="categoryOptions">
-      <input type="text" class="bulk-subcategory" placeholder="Подкатегория" value="${escapeHtml(item.subcategory)}" list="subcategoryOptions">
-      <button type="button" class="bulk-remove" data-idx="${idx}">✕</button>
-    </div>
-  `).join("");
-
-  bulkList.querySelectorAll(".bulk-row").forEach((rowEl) => {
-    const idx = parseInt(rowEl.dataset.idx, 10);
-    rowEl.querySelector(".bulk-sku").addEventListener("input", (e) => { bulkItems[idx].sku = e.target.value; });
-    rowEl.querySelector(".bulk-weight").addEventListener("input", (e) => { bulkItems[idx].weight = e.target.value; });
-    rowEl.querySelector(".bulk-category").addEventListener("input", (e) => { bulkItems[idx].category = e.target.value; });
-    rowEl.querySelector(".bulk-subcategory").addEventListener("input", (e) => { bulkItems[idx].subcategory = e.target.value; });
   });
 
-  bulkList.querySelectorAll(".bulk-remove").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const idx = parseInt(btn.dataset.idx, 10);
-      URL.revokeObjectURL(bulkItems[idx].previewUrl);
-      bulkItems.splice(idx, 1);
-      renderBulkList();
-    });
-  });
-}
+  // Логин
+  document.getElementById("loginBtn").addEventListener("click", async () => {
+    const email = document.getElementById("authEmail").value.trim();
+    const pass = document.getElementById("authPassword").value.trim();
+    const authStatus = document.getElementById("authStatus");
 
-bulkSaveBtn.addEventListener("click", async () => {
-  if (bulkItems.length === 0) {
-    bulkStatus.textContent = "Сначала выберите фотографии.";
-    return;
-  }
-  const missingSku = bulkItems.some((it) => !it.sku.trim());
-  if (missingSku) {
-    bulkStatus.textContent = "Заполните артикул у каждого изделия перед сохранением.";
-    return;
-  }
-
-  bulkSaveBtn.disabled = true;
-  let done = 0;
-
-  // Загружаем последовательно (не параллельно), чтобы не упереться в лимиты Storage
-  // при 40-50 файлах разом и чтобы порядок createdAt соответствовал порядку выбора.
-  for (const item of bulkItems) {
-    bulkStatus.textContent = `Загрузка ${done + 1} из ${bulkItems.length}...`;
     try {
-      const blob = await resizeImage(item.file);
-      const imgUrl = await uploadProductImage(blob);
-      await addDoc(collection(db, "products"), {
-        sku: item.sku.trim(),
-        weight: item.weight.trim(),
-        category: item.category.trim(),
-        subcategory: item.subcategory.trim(),
-        img: imgUrl,
-        createdAt: serverTimestamp()
-      });
-      done++;
-    } catch (err) {
-      console.error("Ошибка сохранения товара из массовой загрузки:", item.sku, err);
-      bulkStatus.textContent = `Ошибка на файле "${item.file.name}": ${err.message || err}`;
+      authStatus.style.display = "none";
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(err) {
+      authStatus.innerText = "Ошибка авторизации: " + err.message;
+      authStatus.style.display = "block";
     }
-  }
+  });
 
-  bulkStatus.textContent = `Готово: сохранено ${done} из ${bulkItems.length}.`;
-  bulkSaveBtn.disabled = false;
-  bulkItems.forEach((it) => URL.revokeObjectURL(it.previewUrl));
-  bulkItems = [];
-  await loadProducts();
-  setTimeout(() => { bulkModal.classList.remove("show"); }, 1200);
-});
+  // Выход
+  document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
 
-// ===== ESC закрывает любую открытую модалку =====
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    productFormModal.classList.remove("show");
-    bulkModal.classList.remove("show");
-  }
-});
+  // Добавление товара формы
+  document.getElementById("productForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById("submitBtn");
+    const statusMsg = document.getElementById("statusMessage");
+    
+    const sku = document.getElementById("sku").value.trim();
+    const weight = document.getElementById("weight").value.trim();
+    const category = document.getElementById("category").value;
+    const subcategory = document.getElementById("subcategory").value;
+    let imageName = document.getElementById("imageName").value.trim();
+
+    // Форматируем путь, чтобы в базе всегда хранилась структура с приставкой папки
+    if (imageName && !imageName.startsWith("images/")) {
+      imageName = "images/" + imageName;
+    }
+
+    try {
+      submitBtn.disabled = true;
+      statusMsg.style.display = "none";
+
+      // Сохраняем текстовые данные напрямую в Firestore (Firebase Storage не задействован)
+      await addDoc(collection(db, "products"), {
+        sku: sku,
+        weight: weight,
+        category: category,
+        subcategory: subcategory,
+        img: imageName,
+        createdAt: new Date().toISOString()
+      });
+
+      statusMsg.className = "status success";
+      statusMsg.innerText = `Товар ${sku} успешно сохранен! Не забудьте скопировать файл в /images/.`;
+      statusMsg.style.display = "block";
+
+      // Сброс формы (кроме категорий для удобства потокового ввода)
+      document.getElementById("sku").value = "";
+      document.getElementById("weight").value = "";
+      document.getElementById("imageName").value = "";
+
+    } catch (error) {
+      console.error(error);
+      statusMsg.className = "status error";
+      statusMsg.innerText = "Ошибка сохранения: " + error.message;
+      statusMsg.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
 </script>
-
 </body>
 </html>
