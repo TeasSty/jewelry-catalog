@@ -1,3 +1,313 @@
+<!-- admin.html — Версия с безопасным обновлением и списком последних товаров -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Панель управления каталогом</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Базовые стили для аккуратного интерфейса админки */
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f7; color: #1d1d1f; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    h2 { margin-top: 0; font-weight: 600; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #d2d2d7; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+    input:focus, select:focus { outline: none; border-color: #0071e3; }
+    button { background: #0071e3; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 500; width: 100%; }
+    button:disabled { background: #86868b; }
+    .logout-btn { background: #ff3b30; margin-top: 10px; }
+    .status { padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 14px; }
+    .status.success { background: #e3f9e5; color: #1f7a27; border: 1px solid #a3e8ab; }
+    .status.error { background: #ffe5e5; color: #cf2222; border: 1px solid #fca5a5; }
+    
+    /* Стили для таблицы последних товаров */
+    .table-wrapper { overflow-x: auto; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    th, td { padding: 12px; border-bottom: 1px solid #e5e5ea; }
+    th { font-weight: 600; background: #f5f5f7; }
+    .delete-btn { background: #ff3b30; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; width: auto; display: inline-block; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Блок авторизации -->
+  <div id="authContainer" class="card">
+    <h2>Вход в панель администратора</h2>
+    <div id="authStatus" class="status error"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="admin@voronin-jewelry.ru">
+    </div>
+    <div class="form-group">
+      <label>Пароль</label>
+      <input type="password" id="authPassword" placeholder="••••••••">
+    </div>
+    <button id="loginBtn">Войти</button>
+  </div>
+
+  <!-- Основной интерфейс админки -->
+  <div id="adminInterface" style="display: none;">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Добавление / Изменение товара</h2>
+        <button id="logoutBtn" style="width: auto; padding: 8px 16px;" class="logout-btn">Выйти</button>
+      </div>
+
+      <div id="statusMessage" class="status"></div>
+
+      <form id="productForm">
+        <div class="form-group">
+          <label>Артикул (SKU) *</label>
+          <input type="text" id="sku" placeholder="Например: КП-141" required>
+        </div>
+        <div class="form-group">
+          <label>Вес изделия (в граммах)</label>
+          <input type="text" id="weight" placeholder="Например: 4.25">
+        </div>
+        <div class="form-group">
+          <label>Категория *</label>
+          <select id="category" required>
+            <option value="">Выберите категорию</option>
+            <option value="Кольца">Кольца</option>
+            <option value="Обручальные">Обручальные</option>
+            <option value="Серьги">Серьги</option>
+            <option value="Гарнитуры">Гарнитуры</option>
+            <option value="Подвески">Подвески</option>
+            <option value="Колье">Колье</option>
+            <option value="Браслеты">Браслеты</option>
+            <option value="Пирсинг">Пирсинг</option>
+            <option value="Цепи/Браслеты (ручная работа)">Цепи/Браслеты (ручная работа)</option>
+            <option value="Ложки">Ложки</option>
+            <option value="Броши">Броши</option>
+            <option value="Православные">Православные</option>
+            <option value="Восток">Восток</option>
+            <option value="Разное">Разное</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Подкатегория</label>
+          <select id="subcategory">
+            <option value="">Без подкатегории</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Название файла изображения</label>
+          <input type="text" id="imageName" placeholder="Например: kp-141.jpg">
+        </div>
+        <button type="submit" id="submitBtn">Сохранить в Firestore</button>
+      </form>
+    </div>
+
+    <!-- Список последних товаров -->
+    <div class="card">
+      <h3>Последние 10 товаров</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Категория</th>
+              <th>Вес</th>
+              <th>Изображение</th>
+              <th>Действие</th>
+            </tr>
+          </thead>
+          <tbody id="recentProductsTable">
+            <tr>
+              <td colspan="5" style="text-align: center; color: #86868b;">Загрузка списка...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { 
+    getFirestore, 
+    collection, 
+    doc, 
+    getDoc, 
+    setDoc, 
+    deleteDoc,
+    query, 
+    orderBy, 
+    limit, 
+    onSnapshot,
+    serverTimestamp 
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
+    authDomain: "voronin-jewelry.firebaseapp.com",
+    projectId: "voronin-jewelry",
+    messagingSenderId: "1067796651938",
+    appId: "1:1067796651938:web:3d89a194660765b4869cfb",
+    measurementId: "G-FJ9Z8C6YG"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const subcatMap = {
+    "Кольца": ["Классические", "Помолвочные"],
+    "Обручальные": ["Гладкие", "С алмазной гранью"],
+    "Серьги": ["Золотые", "Серебряные"],
+    "Гарнитуры": ["Золотые", "Серебряные"],
+    "Подвески": ["Кресты", "Шармы"],
+    "Колье": ["Золотые", "Серебряные"],
+    "Цепи/Браслеты (ручная работа)": ["Все цепи", "Браслеты"]
+  };
+
+  // Переключение подкатегорий
+  document.getElementById("category").addEventListener("change", (e) => {
+    const cat = e.target.value;
+    const subSelect = document.getElementById("subcategory");
+    subSelect.innerHTML = '<option value="">Без подкатегории</option>';
+    
+    if(subcatMap[cat]) {
+      subcatMap[cat].forEach(sub => {
+        subSelect.innerHTML += `<option value="${sub}">${sub}</option>`;
+      });
+    }
+  });
+
+  // Отслеживание сессии авторизации
+  let unsubscribeRecentList = null;
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      document.getElementById("authContainer").style.display = "none";
+      document.getElementById("adminInterface").style.display = "block";
+      initRecentList(); // Запускаем живую ленту товаров при входе
+    } else {
+      document.getElementById("authContainer").style.display = "block";
+      document.getElementById("adminInterface").style.display = "none";
+      if (unsubscribeRecentList) {
+        unsubscribeRecentList();
+        unsubscribeRecentList = null;
+      }
+    }
+  });
+
+  // Вход / Выход
+  document.getElementById("loginBtn").addEventListener("click", async () => {
+    const email = document.getElementById("authEmail").value.trim();
+    const pass = document.getElementById("authPassword").value.trim();
+    const authStatus = document.getElementById("authStatus");
+
+    try {
+      authStatus.style.display = "none";
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(err) {
+      authStatus.innerText = "Ошибка авторизации: " + err.message;
+      authStatus.style.display = "block";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
+
+  // Обработка отправки формы
+  document.getElementById("productForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById("submitBtn");
+    const statusMsg = document.getElementById("statusMessage");
+    
+    const sku = document.getElementById("sku").value.trim();
+    const weight = document.getElementById("weight").value.trim();
+    const category = document.getElementById("category").value;
+    const subcategory = document.getElementById("subcategory").value;
+    let imageName = document.getElementById("imageName").value.trim();
+
+    statusMsg.style.display = "none";
+
+    // 1. Проверка пустого SKU на клиенте
+    if (!sku) {
+      statusMsg.className = "status error";
+      statusMsg.innerText = "Ошибка: Артикул (SKU) не может быть пустым!";
+      statusMsg.style.display = "block";
+      return;
+    }
+
+    // Авто-превращение имени файла в путь
+    if (imageName && !imageName.startsWith("images/")) {
+      imageName = "images/" + imageName;
+    }
+
+    try {
+      submitBtn.disabled = true;
+
+      const docRef = doc(db, "products", sku);
+      const docSnap = await getDoc(docRef);
+
+      const updateData = {
+        sku: sku,
+        weight: weight,
+        category: category,
+        subcategory: subcategory,
+        img: imageName,
+        updatedAt: serverTimestamp() // Фиксируем дату изменения всегда
+      };
+
+      if (!docSnap.exists()) {
+        // Если товар новый, прокидываем время создания
+        updateData.createdAt = serverTimestamp();
+      }
+
+      // Безопасное сохранение без перезаписи createdAt для старых товаров
+      await setDoc(docRef, updateData, { merge: true });
+
+      statusMsg.className = "status success";
+      statusMsg.innerText = `Товар ${sku} успешно сохранен/обновлен!`;
+      statusMsg.style.display = "block";
+
+      // Очищаем форму для следующей записи
+      document.getElementById("sku").value = "";
+      document.getElementById("weight").value = "";
+      document.getElementById("imageName").value = "";
+
+    } catch (error) {
+      console.error(error);
+      statusMsg.className = "status error";
+      statusMsg.innerText = "Ошибка Firestore: " + error.message;
+      statusMsg.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Функция вывода последних добавленных товаров с подпиской на изменения (onSnapshot)
+function initRecentList() {
+  const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(20));
+  
+  unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
+    const tbody = document.getElementById("recentProductsTable");
+    if (snapshot.empty) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
+      return;
+    }
+
+    let html = "";
+    snapshot.forEach((docSnap) => {
+      const item = docSnap.data();
+      // Сохраняем все данные в data-* атрибуты строки для быстрого редактирования без запросов к БД
+      html += `
+        <tr id="row-${item.sku}" 
+            data-sku="${item.sku || ""}" 
+            data-weight="${item.weight || ""}" 
+            data-category="${item.category || ""}" 
+            data-subcategory="${item.subcategory || ""}" 
+            data-img="${item.img || ""}">
+          <td><strong>${item.sku || ""}</strong></td>
+          <td>${item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
           <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
           <td><span style="font-size: 11px; color: #86868b;">${item.img || "—"}</span></td>
           <td>
