@@ -1,85 +1,73 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ИП Воронин — Ювелирный каталог</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    :root{ --bg:#1a1a1a; --bg-raised:#232323; --text:#e0e0e0; --text-dim:#9a9a9a; --accent:#c9a24b; --line:#3a3a3a; }
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;}
-    /* Стили для карточек */
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px;}
-    .card{background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
-    .card-img{aspect-ratio:1/1;background:#111;display:flex;align-items:center;justify-content:center;}
-    .card-img img{width:100%;height:100%;object-fit:cover;display:block;}
-    .card-body{padding:12px;}
-    .card-sku{font-size:13px;font-weight:600;}
-    .card-weight{font-size:12px;color:var(--text-dim);}
-    /* Остальные стили сохраняются как были */
-  </style>
-</head>
-<body>
-
-<!-- Здесь должен быть ваш HTML разметки (nav, hero, layout и т.д. - оставьте как было) -->
-<div id="productGrid" class="grid"></div>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
-    authDomain: "voronin-jewelry.firebaseapp.com",
-    projectId: "voronin-jewelry",
-    storageBucket: "voronin-jewelry.appspot.com",
-    messagingSenderId: "1067796651938",
-    appId: "1:1067796651938:web:3d89a194660765b4869cfb"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  async function loadCatalog() {
-    const grid = document.getElementById("productGrid");
-    try {
-      const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      
-      grid.innerHTML = ""; // Очистка перед загрузкой
-
-      snapshot.forEach((doc) => {
-        const item = doc.data();
-        
-        // ЛОГИКА ПУТЕЙ:
-        // Если в базе записано 'images/kp-141.jpg', используем это.
-        // Если только 'kp-141.jpg', добавляем папку.
-        let imgPath = item.img || "";
-        if (imgPath && !imgPath.startsWith("images/")) {
-          imgPath = "images/" + imgPath;
+          renderGrid();
+          document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
         }
-
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `
-          <div class="card-img">
-            <img src="${imgPath}" alt="${item.sku}" 
-                 onerror="this.onerror=null; this.src='images/placeholder.jpg';">
-          </div>
-          <div class="card-body">
-            <div class="card-sku">${item.sku}</div>
-            <div class="card-weight">${item.weight ? item.weight + ' гр.' : ''}</div>
-          </div>
-        `;
-        grid.appendChild(card);
       });
-    } catch (e) {
-      console.error("Ошибка загрузки:", e);
-    }
+    });
   }
 
-  loadCatalog();
+  function initCatalogInterface() {
+    const allGoodsBtn = document.getElementById("allGoodsBtn");
+    document.getElementById("allGoodsCount").textContent = rawItems.length;
+    
+    allGoodsBtn.addEventListener("click", () => {
+      document.querySelectorAll("#categoryList .cat").forEach(c => {
+        c.classList.remove("open");
+        c.classList.remove("active");
+      });
+      
+      allGoodsBtn.classList.add("active");
+      activeCategory = "все товары";
+      activeSubcategory = "";
+      currentPage = 1;
+      document.getElementById("activeCatName").textContent = "Все товары";
+      
+      renderGrid();
+      closeSidebarMobile();
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      searchTerm = e.target.value.trim();
+      currentPage = 1;
+      renderGrid();
+    });
+
+    document.getElementById("searchIconBtn").addEventListener("click", (e) => {
+      e.preventDefault();
+      document.getElementById("searchInput").focus();
+      document.querySelector(".main").scrollIntoView({behavior:"smooth"});
+    });
+
+    renderCategories();
+    renderGrid();
+  }
+
+  const burgerBtn = document.getElementById("burgerBtn");
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+
+  function openSidebarMobile(){
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
+    burgerBtn.classList.add("open");
+  }
+  function closeSidebarMobile(){
+    if(window.innerWidth > 900) return;
+    sidebar.classList.remove("open");
+    overlay.classList.remove("show");
+    burgerBtn.classList.remove("open");
+  }
+
+  burgerBtn.addEventListener("click", () => {
+    if(sidebar.classList.contains("open")){
+      closeSidebarMobile();
+    } else {
+      openSidebarMobile();
+    }
+  });
+  overlay.addEventListener("click", closeSidebarMobile);
+
+  loadCatalogFromFirestore();
 </script>
+
 </body>
 </html>
