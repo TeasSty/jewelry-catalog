@@ -466,15 +466,20 @@
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         
-        // Корректная обработка сохраненного пути. 
-        // Если путь уже содержит "images/", оставляем, если это просто имя файла — дописываем.
-        let imagePath = data.img || "";
-        if (imagePath && !imagePath.startsWith("images/")) {
-          imagePath = "images/" + imagePath;
-        }
+       
+let imagePath = "";
 
-        loadedProducts.push({
-          img: IMG_BASE + imagePath,
+if (data.image) {
+  imagePath = data.image;
+} else if (data.img) {
+  imagePath = data.img;
+}
+
+let imagePath = data.image || "";
+
+loadedProducts.push({
+          img: imagePath,
+          img: "/" + imagePath,
           sku: data.sku,
           weight: data.weight,
           category: (data.category || "").toLowerCase(),
