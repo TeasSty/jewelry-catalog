@@ -1,73 +1,66 @@
-          renderGrid();
-          document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
-        }
-      });
-    });
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ИП Воронин — Ювелирный каталог</title>
+<meta name="description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1a1a1a;
+    --bg-raised:#232323;
+    --bg-raised-2:#2a2a2a;
+    --line:#3a3a3a;
+    --text:#e0e0e0;
+    --text-dim:#9a9a9a;
+    --accent:#c9a24b;
+    --accent-dim:#8f7736;
   }
-
-  function initCatalogInterface() {
-    const allGoodsBtn = document.getElementById("allGoodsBtn");
-    document.getElementById("allGoodsCount").textContent = rawItems.length;
-    
-    allGoodsBtn.addEventListener("click", () => {
-      document.querySelectorAll("#categoryList .cat").forEach(c => {
-        c.classList.remove("open");
-        c.classList.remove("active");
-      });
-      
-      allGoodsBtn.classList.add("active");
-      activeCategory = "все товары";
-      activeSubcategory = "";
-      currentPage = 1;
-      document.getElementById("activeCatName").textContent = "Все товары";
-      
-      renderGrid();
-      closeSidebarMobile();
-    });
-
-    document.getElementById("searchInput").addEventListener("input", (e) => {
-      searchTerm = e.target.value.trim();
-      currentPage = 1;
-      renderGrid();
-    });
-
-    document.getElementById("searchIconBtn").addEventListener("click", (e) => {
-      e.preventDefault();
-      document.getElementById("searchInput").focus();
-      document.querySelector(".main").scrollIntoView({behavior:"smooth"});
-    });
-
-    renderCategories();
-    renderGrid();
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
   }
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;}
+  img{max-width:100%;display:block;}
 
-  const burgerBtn = document.getElementById("burgerBtn");
-  const sidebar = document.getElementById("sidebar");
-  const overlay = document.getElementById("overlay");
-
-  function openSidebarMobile(){
-    sidebar.classList.add("open");
-    overlay.classList.add("show");
-    burgerBtn.classList.add("open");
+  /* ===== NAV ===== */
+  .nav{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    height:74px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 28px;
+    background:rgba(26,26,26,.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
   }
-  function closeSidebarMobile(){
-    if(window.innerWidth > 900) return;
-    sidebar.classList.remove("open");
-    overlay.classList.remove("show");
-    burgerBtn.classList.remove("open");
+  
+  .logo{
+    display:flex;
+    flex-direction:column;
+    line-height:1.15;
+    text-align:left;
   }
-
-  burgerBtn.addEventListener("click", () => {
-    if(sidebar.classList.contains("open")){
-      closeSidebarMobile();
-    } else {
-      openSidebarMobile();
-    }
-  });
-  overlay.addEventListener("click", closeSidebarMobile);
-
-  loadCatalogFromFirestore();
-</script>
-
-</body>
-</html>
+  .logo-main {
+    font-weight:900;
+    font-size:20px;
+    letter-spacing:.02em;
+    color:#ffffff;
+    text-transform:uppercase;
+  }
+  .logo-sub {
+    font-size:9.5px;
+    font-weight:600;
+    letter-spacing:.18em;
+    color:#8a8a8a;
+    text-transform:uppercase;
+    margin-top:4px;
+  }
