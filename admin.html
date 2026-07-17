@@ -225,7 +225,14 @@
     const weight = document.getElementById("weight").value.trim();
     const category = document.getElementById("category").value;
     const subcategory = document.getElementById("subcategory").value;
-    let imageName = document.getElementById("imageName").value.trim();
+    // Авто-превращение имени файла в путь
+let imageName = document.getElementById("imageName").value.trim();
+// Если админ ввел просто имя файла, превращаем в путь для GitHub
+if (imageName && !imageName.startsWith("images/")) {
+  imageName = "images/" + imageName;
+}
+// Если админ случайно ввел путь типа ./images/ или /images/, приводим к стандарту
+imageName = imageName.replace(/^\.?\/?images\//, "images/");
 
     statusMsg.style.display = "none";
 
