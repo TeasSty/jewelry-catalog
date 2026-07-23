@@ -69,22 +69,23 @@
         </div>
         <div class="form-group">
           <label>Категория *</label>
+          <!-- value = слаг, ровно в таком виде category хранится в Firestore и фильтруется на сайте -->
           <select id="category" required>
             <option value="">Выберите категорию</option>
-            <option value="Кольца">Кольца</option>
-            <option value="Обручальные">Обручальные</option>
-            <option value="Серьги">Серьги</option>
-            <option value="Гарнитуры">Гарнитуры</option>
-            <option value="Подвески">Подвески</option>
-            <option value="Колье">Колье</option>
-            <option value="Браслеты">Браслеты</option>
-            <option value="Пирсинг">Пирсинг</option>
-            <option value="Цепи/Браслеты (ручная работа)">Цепи/Браслеты (ручная работа)</option>
-            <option value="Ложки">Ложки</option>
-            <option value="Броши">Броши</option>
-            <option value="Православные">Православные</option>
-            <option value="Восток">Восток</option>
-            <option value="Разное">Разное</option>
+            <option value="koltsa">Кольца</option>
+            <option value="obruch">Обручальные</option>
+            <option value="sergi">Серьги</option>
+            <option value="garnitury">Гарнитуры</option>
+            <option value="podveski">Подвески</option>
+            <option value="kolie">Колье</option>
+            <option value="braslety">Браслеты</option>
+            <option value="piercing">Пирсинг</option>
+            <option value="tsepi">Цепи/Браслеты (ручная работа)</option>
+            <option value="lozhki">Ложки</option>
+            <option value="broshi">Броши</option>
+            <option value="pravoslavie">Православные</option>
+            <option value="vostok">Восток</option>
+            <option value="raznoe">Разное</option>
           </select>
         </div>
         <div class="form-group">
@@ -99,6 +100,18 @@
         </div>
         <button type="submit" id="submitBtn">Сохранить в Firestore</button>
       </form>
+    </div>
+
+    <!-- Экспорт каталога в статический файл: сайт читает его вместо Firestore, чтобы не тратить квоту чтений -->
+    <div class="card">
+      <h2>Публикация каталога на сайт</h2>
+      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
+        Сайт по умолчанию показывает не «живую» базу, а последний выгруженный файл <code>catalog.json</code>.
+        После любых изменений товаров нажмите кнопку, скачайте файл и загрузите (замените) его в корне репозитория на GitHub,
+        рядом с <code>index.html</code>.
+      </p>
+      <div id="exportStatus" class="status"></div>
+      <button id="exportBtn" type="button">Скачать catalog.json</button>
     </div>
 
     <!-- Список последних товаров -->
@@ -129,18 +142,19 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-  import { 
-    getFirestore, 
-    collection, 
-    doc, 
-    getDoc, 
-    setDoc, 
+  import {
+    getFirestore,
+    collection,
+    doc,
+    getDoc,
+    setDoc,
     deleteDoc,
-    query, 
-    orderBy, 
-    limit, 
+    getDocs,
+    query,
+    orderBy,
+    limit,
     onSnapshot,
-    serverTimestamp 
+    serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -156,14 +170,21 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  const CATEGORY_NAMES = {
+    koltsa: "Кольца", obruch: "Обручальные", sergi: "Серьги", garnitury: "Гарнитуры",
+    podveski: "Подвески", kolie: "Колье", braslety: "Браслеты", piercing: "Пирсинг",
+    tsepi: "Цепи/Браслеты (ручная работа)", lozhki: "Ложки", broshi: "Броши",
+    pravoslavie: "Православные", vostok: "Восток", raznoe: "Разное"
+  };
+
   const subcatMap = {
-    "Кольца": ["Классические", "Помолвочные"],
-    "Обручальные": ["Гладкие", "С алмазной гранью"],
-    "Серьги": ["Золотые", "Серебряные"],
-    "Гарнитуры": ["Золотые", "Серебряные"],
-    "Подвески": ["Кресты", "Шармы"],
-    "Колье": ["Золотые", "Серебряные"],
-    "Цепи/Браслеты (ручная работа)": ["Все цепи", "Браслеты"]
+    koltsa: ["Классические", "Помолвочные"],
+    obruch: ["Гладкие", "С алмазной гранью"],
+    sergi: ["Золотые", "Серебряные"],
+    garnitury: ["Золотые", "Серебряные"],
+    podveski: ["Кресты", "Шармы"],
+    kolie: ["Золотые", "Серебряные"],
+    tsepi: ["Браслеты"]
   };
 
   // Переключение подкатегорий
@@ -237,9 +258,10 @@
       return;
     }
 
-    // Авто-превращение имени файла в путь
-    if (imageName && !imageName.startsWith("images/")) {
-      imageName = "images/" + imageName;
+    // Внешние ссылки (i.ibb.co и т.п.) оставляем как есть, имя файла превращаем в путь внутри images/
+    if (imageName && !/^https?:\/\//i.test(imageName)) {
+      imageName = imageName.replace(/^\/+/, "");
+      if (!imageName.startsWith("images/")) imageName = "images/" + imageName;
     }
 
     try {
@@ -248,12 +270,14 @@
       const docRef = doc(db, "products", sku);
       const docSnap = await getDoc(docRef);
 
+      // Схема должна совпадать с тем, что читает index.html: поле image, вес числом, category слагом
       const updateData = {
         sku: sku,
-        weight: weight,
+        name: sku,
+        weight: weight === "" ? "" : (parseFloat(weight.replace(",", ".")) || 0),
         category: category,
-        subcategory: subcategory,
-        img: imageName,
+        subcategory: subcategory || null,
+        image: imageName,
         updatedAt: serverTimestamp() // Фиксируем дату изменения всегда
       };
 
@@ -298,18 +322,19 @@ function initRecentList() {
     let html = "";
     snapshot.forEach((docSnap) => {
       const item = docSnap.data();
+      const image = item.image || item.img || "";
       // Сохраняем все данные в data-* атрибуты строки для быстрого редактирования без запросов к БД
       html += `
-        <tr id="row-${item.sku}" 
-            data-sku="${item.sku || ""}" 
-            data-weight="${item.weight || ""}" 
-            data-category="${item.category || ""}" 
-            data-subcategory="${item.subcategory || ""}" 
-            data-img="${item.img || ""}">
+        <tr id="row-${item.sku}"
+            data-sku="${item.sku || ""}"
+            data-weight="${item.weight ?? ""}"
+            data-category="${item.category || ""}"
+            data-subcategory="${item.subcategory || ""}"
+            data-img="${image}">
           <td><strong>${item.sku || ""}</strong></td>
-          <td>${item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
+          <td>${CATEGORY_NAMES[item.category] || item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
           <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
-          <td><span style="font-size: 11px; color: #86868b;">${item.img || "—"}</span></td>
+          <td><span style="font-size: 11px; color: #86868b;">${image || "—"}</span></td>
           <td>
             <button class="edit-btn" style="background:#34c759; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:none; margin-right:4px;">Редактировать</button>
             <button class="delete-btn" data-sku="${item.sku}">Удалить</button>
@@ -372,6 +397,56 @@ function initRecentList() {
     console.error("Ошибка при получении списка товаров: ", error);
   });
 }
+
+// Экспорт всей коллекции products в catalog.json — сайт читает этот файл вместо живых
+// запросов к Firestore, что не тратит дневную квоту бесплатного плана на чтения.
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("exportBtn");
+  const statusEl = document.getElementById("exportStatus");
+
+  btn.disabled = true;
+  statusEl.style.display = "none";
+
+  try {
+    const snapshot = await getDocs(collection(db, "products"));
+    const items = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      items.push({
+        sku: data.sku || docSnap.id,
+        weight: data.weight ?? "",
+        category: data.category || "",
+        subcategory: data.subcategory || "",
+        image: data.image || data.img || "",
+        // Firestore Timestamp не сериализуется в JSON напрямую — переводим в ISO-строку
+        createdAt: data.createdAt && typeof data.createdAt.toDate === "function"
+          ? data.createdAt.toDate().toISOString()
+          : (data.createdAt || null)
+      });
+    });
+
+    const blob = new Blob([JSON.stringify({ items }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "catalog.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.className = "status success";
+    statusEl.innerText = `Готово: выгружено ${items.length} товаров. Загрузите файл catalog.json в репозиторий на GitHub, заменив старый.`;
+    statusEl.style.display = "block";
+  } catch (error) {
+    console.error(error);
+    statusEl.className = "status error";
+    statusEl.innerText = "Ошибка экспорта: " + error.message;
+    statusEl.style.display = "block";
+  } finally {
+    btn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>
