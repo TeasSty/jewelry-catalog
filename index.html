@@ -21,6 +21,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   html{scroll-behavior:smooth;}
+  #about, #catalog, #contacts{scroll-margin-top:84px;}
   body{
     background:var(--bg);
     color:var(--text);
@@ -207,7 +208,7 @@
     aspect-ratio:1/1;background:var(--bg-raised-2);
     display:flex;align-items:center;justify-content:center;overflow:hidden;
   }
-  .card-img img{width:100%;height:100%;object-fit:cover;}
+  .card-img img{width:100%;height:100%;object-fit:contain;}
   .card-body{padding:12px 14px 14px;}
   .card-sku{font-size:13px;font-weight:600;letter-spacing:.02em;}
   .card-weight{font-size:12px;color:var(--text-dim);margin-top:4px;}
@@ -343,7 +344,7 @@
 
 <div class="overlay" id="overlay"></div>
 
-<header class="hero">
+<header class="hero" id="about">
   <div class="eyebrow">ИП Воронин · Кострома</div>
   <h1>Ювелирные изделия<br>собственного производства</h1>
   <p>Кольца, серьги, цепи и другие украшения из золота и серебра. Актуальный каталог с артикулами и весом каждого изделия.</p>
