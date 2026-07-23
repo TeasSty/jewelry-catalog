@@ -114,6 +114,20 @@
       <button id="exportBtn" type="button">Скачать catalog.json</button>
     </div>
 
+    <!-- Разовая синхронизация: полный каталог (2982 товара), собранный с исходного сайта,
+         пока существует только в файле catalog.json. Firestore ещё не знает о новых товарах —
+         эта кнопка один раз загружает их в базу, чтобы Экспорт выше больше не терял данные. -->
+    <div class="card">
+      <h2>Синхронизация полного каталога с базой</h2>
+      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
+        Одноразовая операция: загружает все товары из <code>catalog.json</code> в Firestore (создаёт недостающие,
+        обновляет фото у существующих). Ничего не удаляет. Нужно один раз нажать после того, как в проект добавлен
+        полный каталог с фотографиями.
+      </p>
+      <div id="syncStatus" class="status"></div>
+      <button id="syncBtn" type="button">Синхронизировать каталог.json в Firestore</button>
+    </div>
+
     <!-- Список последних товаров -->
     <div class="card">
       <h3>Последние 10 товаров</h3>
@@ -154,7 +168,8 @@
     orderBy,
     limit,
     onSnapshot,
-    serverTimestamp
+    serverTimestamp,
+    writeBatch
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -443,6 +458,67 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
     statusEl.className = "status error";
     statusEl.innerText = "Ошибка экспорта: " + error.message;
     statusEl.style.display = "block";
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Разовая синхронизация: читает catalog.json (собранный с исходного сайта) и записывает
+// каждый товар в Firestore с merge:true по SKU, чтобы не создавать дубликаты и не терять
+// существующие поля. Пишет пачками по 400 операций — лимит Firestore на batch составляет 500.
+document.getElementById("syncBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("syncBtn");
+  const statusEl = document.getElementById("syncStatus");
+
+  btn.disabled = true;
+  statusEl.style.display = "none";
+  statusEl.className = "status success";
+  statusEl.innerText = "Загружаю catalog.json...";
+  statusEl.style.display = "block";
+
+  try {
+    const res = await fetch("catalog.json", { cache: "no-cache" });
+    if (!res.ok) throw new Error("Не удалось прочитать catalog.json (" + res.status + ")");
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : data.items;
+    if (!Array.isArray(items) || items.length === 0) throw new Error("catalog.json пуст или повреждён");
+
+    const CHUNK = 400;
+    let written = 0;
+
+    for (let i = 0; i < items.length; i += CHUNK) {
+      const chunk = items.slice(i, i + CHUNK);
+      const batch = writeBatch(db);
+
+      for (const item of chunk) {
+        if (!item.sku) continue;
+        const docRef = doc(db, "products", item.sku);
+        const payload = {
+          sku: item.sku,
+          name: item.sku,
+          weight: item.weight === "" || item.weight == null ? "" : Number(item.weight),
+          category: item.category || "",
+          subcategory: item.subcategory || null,
+          image: item.image || "",
+          updatedAt: serverTimestamp()
+        };
+        if (item.createdAt) {
+          payload.createdAt = item.createdAt;
+        }
+        batch.set(docRef, payload, { merge: true });
+      }
+
+      await batch.commit();
+      written += chunk.length;
+      statusEl.innerText = `Записано ${written} из ${items.length}...`;
+    }
+
+    statusEl.className = "status success";
+    statusEl.innerText = `Готово: синхронизировано ${written} товаров с Firestore.`;
+  } catch (error) {
+    console.error(error);
+    statusEl.className = "status error";
+    statusEl.innerText = "Ошибка синхронизации: " + error.message;
   } finally {
     btn.disabled = false;
   }
