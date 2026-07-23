@@ -158,6 +158,24 @@
     font-weight: 600;
   }
 
+  /* Категория с ровно одной подкатегорией: аккордеон ради одного пункта неудобен —
+     показываем её сразу как маленькую кнопку-ярлык под названием категории */
+  .single-sub-btn {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    color: var(--text-dim);
+    font-size: 12.5px;
+    cursor: pointer;
+    padding: 0 4px 12px;
+    transition: color 0.15s;
+  }
+  .single-sub-btn:hover { color: var(--text); }
+  .single-sub-btn.active { color: var(--accent); font-weight: 600; }
+  .single-sub-btn .count { color: inherit; opacity: .75; }
+
   .all-goods-btn {
     width: 100%;
     padding: 14px 4px;
@@ -560,10 +578,11 @@
     list.innerHTML = visible.map(cat => {
       const count = countFor(cat.id);
       const isActive = cat.id === activeCategory;
-      // Раскрывающийся список нужен, только если есть непустые настоящие подкатегории:
-      // из одного пункта «Все кольца» панель делать незачем
+      // Раскрывающийся аккордеон нужен только когда подкатегорий несколько.
+      // Если она ровно одна (как «Зодиак» у Подвесок) — разворачивать нечего, показываем сразу.
       const realSubs = cat.subs.filter(sub => !sub.toLowerCase().startsWith("все ") && countFor(cat.id, sub) > 0);
-      const subs = realSubs.length ? cat.subs.filter(sub => sub.toLowerCase().startsWith("все ") || realSubs.includes(sub)) : [];
+      const isSingleSub = realSubs.length === 1;
+      const subs = realSubs.length > 1 ? cat.subs.filter(sub => sub.toLowerCase().startsWith("все ") || realSubs.includes(sub)) : [];
       const hasSubs = subs.length > 0;
 
       const subsHtml = subs.map(sub => {
@@ -576,6 +595,14 @@
           `;
       }).join("");
 
+      let singleSubHtml = "";
+      if (isSingleSub) {
+        const sub = realSubs[0];
+        const subCount = countFor(cat.id, sub);
+        const isSubActive = activeSubcategory === sub.toLowerCase() && isActive;
+        singleSubHtml = `<button class="single-sub-btn${isSubActive ? ' active' : ''}" data-sub="${sub.toLowerCase()}">${sub} <span class="count">(${subCount})</span></button>`;
+      }
+
       return `
         <div class="cat${isActive ? ' active' : ''}" data-cat="${cat.id}">
           <button class="cat-btn">
@@ -585,6 +612,7 @@
               ${hasSubs ? '<span class="arrow">▾</span>' : ''}
             </span>
           </button>
+          ${singleSubHtml}
           ${hasSubs ? `
           <div class="cat-panel">
             <div class="cat-panel-inner">
@@ -666,11 +694,34 @@
           });
         });
       }
+
+      const singleSubBtn = el.querySelector(".single-sub-btn");
+      if (singleSubBtn) {
+        singleSubBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const subName = singleSubBtn.dataset.sub;
+
+          activeCategory = catId;
+          activeSubcategory = subName;
+          currentPage = 1;
+
+          list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
+          document.getElementById("allGoodsBtn").classList.remove("active");
+          el.classList.add("active");
+          singleSubBtn.classList.add("active");
+
+          const subCleanText = singleSubBtn.textContent.trim().split(" (")[0];
+          document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
+
+          renderGrid();
+          closeSidebarMobile();
+        });
+      }
     });
   }
 
   function getFiltered(){
-    return rawItems.filter(item => {
+    const filtered = rawItems.filter(item => {
       const inCategory = activeCategory === ALL || item.category === activeCategory;
       let inSubcategory = true;
       if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
@@ -679,6 +730,14 @@
       const matchesSearch = item.sku.toLowerCase().includes(searchTerm.toLowerCase());
       return inCategory && inSubcategory && matchesSearch;
     });
+
+    // При активном поиске список новых товаров (сортировка "сначала новые") читается хаотично —
+    // сортируем по артикулу по возрастанию, с учётом чисел внутри строки (кл-3, кл-4, ... кл-30)
+    if (searchTerm) {
+      filtered.sort((a, b) => a.sku.localeCompare(b.sku, "ru", { numeric: true }));
+    }
+
+    return filtered;
   }
 
   function renderGrid(){
