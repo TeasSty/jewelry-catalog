@@ -272,6 +272,7 @@
   .page-btn:hover{border-color:var(--accent-dim);color:var(--text);}
   .page-btn.active{background:var(--accent-dim);color:#1a1a1a;border-color:var(--accent-dim);font-weight:600;}
   .page-btn:disabled{opacity:.35;cursor:not-allowed;}
+  .page-gap{display:flex;align-items:center;padding:0 2px;color:var(--text-dim);font-size:13px;}
 
   /* ===== BOTTOM BAR ===== */
   .bottom-bar{
@@ -411,7 +412,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
@@ -425,11 +426,33 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Теперь изображения берутся локально из папки проекта /images/ (или из репозитория после деплоя)
-  const IMG_BASE = ""; 
+  // Изображения лежат локально в папке проекта images/ (относительный путь — работает и на GitHub Pages в подкаталоге)
+  const IMG_BASE = "images/";
   const PER_PAGE = 20;
 
   let rawItems = [];
+
+  // В базе путь хранится по-разному: внешний URL, "/images/x.jpg", "images/x.jpg" или голое имя файла.
+  // Приводим всё к относительному "images/x.jpg" — абсолютный "/" ломается на GitHub Pages в подкаталоге.
+  function resolveImagePath(raw){
+    const path = String(raw || "").trim();
+    if (!path) return "";
+    if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:")) return path;
+    const clean = path.replace(/^\/+/, "");
+    return clean.startsWith(IMG_BASE) ? clean : IMG_BASE + clean;
+  }
+
+  // createdAt приходит как Timestamp, Date или ISO-строка — в базе сейчас строки
+  function toMillis(value){
+    if (!value) return 0;
+    if (typeof value.toMillis === "function") return value.toMillis();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "string") {
+      const ms = Date.parse(value);
+      return isNaN(ms) ? 0 : ms;
+    }
+    return 0;
+  }
 
   const categories = [
     { id: "koltsa", name: "Кольца", subs: ["Все кольца", "Классические", "Помолвочные"] },
@@ -448,93 +471,112 @@
     { id: "raznoe", name: "Разное", subs: [] }
   ];
 
-  let activeCategory = "все товары";
+  const ALL = "__all__";
+  let activeCategory = ALL;   // хранит id категории из списка выше (в базе category = такой же слаг)
   let activeSubcategory = "";
   let searchTerm = "";
   let currentPage = 1;
 
-  async function loadCatalogFromFirestore() {
+  // Приводим документ из любого источника к тому виду, с которым работает интерфейс
+  function normalizeProduct(data, fallbackId = "") {
+    return {
+      img: resolveImagePath(data.image || data.img || ""),
+      sku: data.sku || fallbackId,
+      weight: data.weight ?? "",
+      category: (data.category || "").toLowerCase(),
+      subcategory: (data.subcategory || "").toLowerCase(),
+      createdAt: toMillis(data.createdAt)
+    };
+  }
+
+  // Основной источник — статический catalog.json: он не тратит квоту чтений Firestore.
+  // Файл выгружается кнопкой в admin.html и коммитится в репозиторий.
+  async function loadFromCache() {
+    const res = await fetch("catalog.json", { cache: "no-cache" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : data.items;
+    if (!Array.isArray(items) || items.length === 0) return null;
+    return items.map(item => normalizeProduct(item));
+  }
+
+  async function loadFromFirestore() {
+    const querySnapshot = await getDocs(collection(db, "products"));
+    const loaded = [];
+    querySnapshot.forEach((doc) => loaded.push(normalizeProduct(doc.data(), doc.id)));
+    return loaded;
+  }
+
+  async function loadCatalog() {
     const loadingState = document.getElementById("loadingState");
     const errorState = document.getElementById("errorState");
     const productGrid = document.getElementById("productGrid");
 
     try {
-      const productsQuery = query(collection(db, "products"), orderBy("createdAt", "desc"));
-      const querySnapshot = await getDocs(productsQuery);
-      
-      const loadedProducts = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        
-       
-let imagePath = "";
+      let loadedProducts = null;
 
-if (data.image) {
-  imagePath = data.image;
-} else if (data.img) {
-  imagePath = data.img;
-}
+      try {
+        loadedProducts = await loadFromCache();
+      } catch (cacheError) {
+        // Нет файла или он битый — не страшно, просто идём в Firestore
+        console.warn("catalog.json недоступен, читаю Firestore:", cacheError);
+      }
 
-let imagePath = data.image || "";
+      if (!loadedProducts) {
+        loadedProducts = await loadFromFirestore();
+      }
 
-loadedProducts.push({
-          img: imagePath,
-          img: "/" + imagePath,
-          sku: data.sku,
-          weight: data.weight,
-          category: (data.category || "").toLowerCase(),
-          subcategory: (data.subcategory || "").toLowerCase()
-        });
-      });
+      // Сортируем на клиенте: orderBy в запросе молча выбрасывает документы без поля createdAt
+      loadedProducts.sort((a, b) => b.createdAt - a.createdAt);
 
       rawItems = loadedProducts;
       loadingState.style.display = "none";
       initCatalogInterface();
 
     } catch (error) {
-      console.error("Ошибка при получении товаров из Firestore: ", error);
+      console.error("Не удалось загрузить каталог: ", error);
       loadingState.style.display = "none";
       productGrid.style.display = "none";
       errorState.style.display = "block";
     }
   }
 
-  function countFor(catName, subcatName = "") {
-    if (catName.toLowerCase() === "все товары") {
-      return rawItems.length;
+  function countFor(catId, subcatName = "") {
+    if (catId === ALL) return rawItems.length;
+    const inCat = rawItems.filter(i => i.category === catId);
+    if (subcatName && !subcatName.toLowerCase().startsWith("все ")) {
+      return inCat.filter(i => i.subcategory === subcatName.toLowerCase()).length;
     }
-    if (subcatName) {
-      if (subcatName.toLowerCase().startsWith("все ")) {
-        return rawItems.filter(i => i.category === catName.toLowerCase()).length;
-      }
-      return rawItems.filter(i => i.category === catName.toLowerCase() && i.subcategory === subcatName.toLowerCase()).length;
-    }
-    return rawItems.filter(i => i.category === catName.toLowerCase()).length;
+    return inCat.length;
   }
 
   function renderCategories(){
     const list = document.getElementById("categoryList");
     
-    list.innerHTML = categories.map(cat => {
-      const count = countFor(cat.name);
-      const isActive = cat.name.toLowerCase() === activeCategory;
-      const hasSubs = cat.subs.length > 0;
-      
-      let subsHtml = "";
-      if (hasSubs) {
-        subsHtml = cat.subs.map(sub => {
-          const subCount = countFor(cat.name, sub);
-          const isSubActive = activeSubcategory === sub.toLowerCase() && isActive;
-          return `
+    // Категории, которых ещё нет в базе, не показываем — иначе половина меню это мёртвые нули
+    const visible = categories.filter(cat => countFor(cat.id) > 0);
+
+    list.innerHTML = visible.map(cat => {
+      const count = countFor(cat.id);
+      const isActive = cat.id === activeCategory;
+      // Раскрывающийся список нужен, только если есть непустые настоящие подкатегории:
+      // из одного пункта «Все кольца» панель делать незачем
+      const realSubs = cat.subs.filter(sub => !sub.toLowerCase().startsWith("все ") && countFor(cat.id, sub) > 0);
+      const subs = realSubs.length ? cat.subs.filter(sub => sub.toLowerCase().startsWith("все ") || realSubs.includes(sub)) : [];
+      const hasSubs = subs.length > 0;
+
+      const subsHtml = subs.map(sub => {
+        const subCount = countFor(cat.id, sub);
+        const isSubActive = activeSubcategory === sub.toLowerCase() && isActive;
+        return `
             <button class="subcat-btn${isSubActive ? ' active' : ''}" data-sub="${sub.toLowerCase()}">
               ${sub} (${subCount})
             </button>
           `;
-        }).join("");
-      }
+      }).join("");
 
       return `
-        <div class="cat${isActive ? ' active' : ''}" data-cat="${cat.name.toLowerCase()}">
+        <div class="cat${isActive ? ' active' : ''}" data-cat="${cat.id}">
           <button class="cat-btn">
             <span>${cat.name}</span>
             <span style="display:flex;align-items:center;">
@@ -557,9 +599,9 @@ loadedProducts.push({
   function setupCategoryListeners(list) {
     list.querySelectorAll(".cat").forEach(el => {
       const catBtn = el.querySelector(".cat-btn");
-      const catName = el.dataset.cat;
-      const targetCategoryData = categories.find(c => c.name.toLowerCase() === catName);
-      const hasSubs = targetCategoryData.subs.length > 0;
+      const catId = el.dataset.cat;
+      const targetCategoryData = categories.find(c => c.id === catId);
+      const hasSubs = el.querySelector(".cat-panel") !== null;
 
       catBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -570,7 +612,7 @@ loadedProducts.push({
 
           if (!isOpen) {
             el.classList.add("open");
-            activeCategory = catName;
+            activeCategory = catId;
             activeSubcategory = "";
             currentPage = 1;
             
@@ -585,7 +627,7 @@ loadedProducts.push({
           }
         } else {
           list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
-          activeCategory = catName;
+          activeCategory = catId;
           activeSubcategory = "";
           currentPage = 1;
 
@@ -605,7 +647,7 @@ loadedProducts.push({
             e.stopPropagation();
             const subName = subBtn.dataset.sub;
             
-            activeCategory = catName;
+            activeCategory = catId;
             activeSubcategory = subName;
             currentPage = 1;
 
@@ -628,7 +670,7 @@ loadedProducts.push({
 
   function getFiltered(){
     return rawItems.filter(item => {
-      const inCategory = activeCategory === "все товары" || item.category === activeCategory;
+      const inCategory = activeCategory === ALL || item.category === activeCategory;
       let inSubcategory = true;
       if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
         inSubcategory = item.subcategory === activeSubcategory;
@@ -678,9 +720,19 @@ loadedProducts.push({
     const pagination = document.getElementById("pagination");
     if(totalPages <= 1){ pagination.innerHTML = ""; return; }
 
+    // Окно из соседних страниц + первая/последняя, иначе при 1700 товарах получается 89 кнопок
+    const pages = new Set([1, totalPages]);
+    for(let p = currentPage - 2; p <= currentPage + 2; p++){
+      if(p >= 1 && p <= totalPages) pages.add(p);
+    }
+    const sorted = [...pages].sort((a, b) => a - b);
+
     let html = `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">‹</button>`;
-    for(let p = 1; p <= totalPages; p++){
+    let prev = 0;
+    for(const p of sorted){
+      if(p - prev > 1) html += `<span class="page-gap">…</span>`;
       html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+      prev = p;
     }
     html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">›</button>`;
     pagination.innerHTML = html;
@@ -708,7 +760,7 @@ loadedProducts.push({
       });
       
       allGoodsBtn.classList.add("active");
-      activeCategory = "все товары";
+      activeCategory = ALL;
       activeSubcategory = "";
       currentPage = 1;
       document.getElementById("activeCatName").textContent = "Все товары";
@@ -758,7 +810,7 @@ loadedProducts.push({
   });
   overlay.addEventListener("click", closeSidebarMobile);
 
-  loadCatalogFromFirestore();
+  loadCatalog();
 </script>
 
 </body>
