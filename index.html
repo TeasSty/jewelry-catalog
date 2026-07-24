@@ -467,6 +467,11 @@
     { id: "raznoe", name: "Разное", subs: [] }
   ];
 
+  // Порядковый номер категории в том же порядке, что и в сайдбаре — нужен, чтобы "Все товары"
+  // шли категория за категорией, а не вперемешку (иначе цепочка и брошь оказываются рядом
+  // только из-за похожего начала артикула по алфавиту)
+  const CATEGORY_ORDER = new Map(categories.map((c, i) => [c.id, i]));
+
   const ALL = "__all__";
   const NEW_ARRIVALS = "__new__";     // не поле в базе — вычисляется как N последних добавленных по createdAt
   const NEW_ARRIVALS_COUNT = 20;
@@ -695,9 +700,21 @@
         .filter(item => item.sku.toLowerCase().includes(term));
     }
 
-    // rawItems уже отсортирован по возрастанию артикула при загрузке — фильтр сохраняет порядок
+    // "Все товары": плоская сортировка по артикулу мешает категории вперемешку (цепочка и брошь
+    // соседствуют просто из-за похожего начала артикула). Группируем сначала по категории —
+    // в том же порядке, что и в сайдбаре, — а внутри категории уже по возрастанию артикула.
+    if (activeCategory === ALL) {
+      return rawItems
+        .filter(item => item.sku.toLowerCase().includes(term))
+        .sort((a, b) => {
+          const orderDiff = (CATEGORY_ORDER.get(a.category) ?? 999) - (CATEGORY_ORDER.get(b.category) ?? 999);
+          return orderDiff !== 0 ? orderDiff : a.sku.localeCompare(b.sku, "ru", { numeric: true });
+        });
+    }
+
+    // Внутри одной категории rawItems уже отсортирован по возрастанию артикула при загрузке
     return rawItems.filter(item => {
-      const inCategory = activeCategory === ALL || item.category === activeCategory;
+      const inCategory = item.category === activeCategory;
       let inSubcategory = true;
       if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
         inSubcategory = item.subcategory === activeSubcategory;
