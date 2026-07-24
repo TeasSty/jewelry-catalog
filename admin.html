@@ -122,6 +122,21 @@
       <button id="dedupeBtn" type="button" style="background:#ff9500;">Найти и удалить дубли</button>
     </div>
 
+    <!-- Одноразовое восстановление фото: часть товаров ссылалась на фото, которые хранились на
+         стороннем сервисе ImgBB и были случайно удалены оттуда при чистке аккаунта. Файлы этих же
+         фото уже скачаны с сайта производителя и лежат в images/ — кнопка просто переключает
+         ссылку в базе с внешней (мёртвой) на локальный файл. -->
+    <div class="card">
+      <h2>Восстановление фото с ImgBB на локальные файлы</h2>
+      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
+        Разовая операция: находит товары, у которых фото — внешняя ссылка вида .../itemsNNNN.jpg,
+        и переключает на уже скачанный локальный файл images/itemsNNNN.jpg. Нужно один раз нажать,
+        если на карточках товаров видна заглушка «изображение не найдено».
+      </p>
+      <div id="fixImagesStatus" class="status"></div>
+      <button id="fixImagesBtn" type="button" style="background:#ff9500;">Восстановить фото</button>
+    </div>
+
     <!-- Единый список товаров: без запроса в поиске — первые 20 по возрастанию артикула,
          с запросом — совпадения, тоже по возрастанию. Одна таблица вместо двух -->
     <div class="card">
@@ -541,6 +556,66 @@ document.getElementById("dedupeBtn").addEventListener("click", async () => {
     console.error(error);
     statusEl.className = "status error";
     statusEl.innerText = "Ошибка очистки: " + error.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Находит товары с внешней ссылкой на фото вида ".../itemsNNNN.jpg" (были на ImgBB, случайно
+// удалены оттуда) и переключает на локальный файл images/itemsNNNN.jpg — он уже скачан с сайта
+// производителя и лежит в репозитории.
+document.getElementById("fixImagesBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("fixImagesBtn");
+  const statusEl = document.getElementById("fixImagesStatus");
+
+  btn.disabled = true;
+  statusEl.style.display = "none";
+  statusEl.className = "status success";
+  statusEl.innerText = "Ищу товары с внешними ссылками на фото...";
+  statusEl.style.display = "block";
+
+  try {
+    const snapshot = await getDocs(collection(db, "products"));
+    const toFix = [];
+    snapshot.forEach(d => {
+      const data = d.data();
+      const img = data.image || "";
+      const m = img.match(/items(\d+)\.jpg/i);
+      if (/^https?:\/\//i.test(img) && m) {
+        toFix.push({ id: d.id, newImage: `items${m[1]}.jpg` });
+      }
+    });
+
+    if (toFix.length === 0) {
+      statusEl.className = "status success";
+      statusEl.innerText = "Внешних ссылок не найдено — всё уже локальное.";
+      return;
+    }
+
+    if (!confirm(`Найдено ${toFix.length} товаров с внешней ссылкой на фото.\nПереключить на локальные файлы (images/itemsNNNN.jpg)?`)) {
+      statusEl.style.display = "none";
+      return;
+    }
+
+    const CHUNK = 400;
+    let fixed = 0;
+    for (let i = 0; i < toFix.length; i += CHUNK) {
+      const chunk = toFix.slice(i, i + CHUNK);
+      const batch = writeBatch(db);
+      chunk.forEach(item => batch.update(doc(db, "products", item.id), { image: item.newImage, updatedAt: serverTimestamp() }));
+      await batch.commit();
+      fixed += chunk.length;
+      statusEl.innerText = `Исправлено ${fixed} из ${toFix.length}...`;
+    }
+
+    statusEl.className = "status success";
+    statusEl.innerText = `Готово: у ${fixed} товаров фото переключено на локальные файлы.`;
+    allProductsCache = null;
+    refreshProductsList();
+  } catch (error) {
+    console.error(error);
+    statusEl.className = "status error";
+    statusEl.innerText = "Ошибка: " + error.message;
   } finally {
     btn.disabled = false;
   }

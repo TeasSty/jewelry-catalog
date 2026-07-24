@@ -293,20 +293,6 @@
   .page-btn:disabled{opacity:.35;cursor:not-allowed;}
   .page-gap{display:flex;align-items:center;padding:0 2px;color:var(--text-dim);font-size:13px;}
 
-  /* ===== BOTTOM BAR ===== */
-  .bottom-bar{
-    position:fixed;bottom:0;left:0;right:0;z-index:100;display:none;
-    background:rgba(26,26,26,.96);backdrop-filter:blur(10px);
-    border-top:1px solid var(--line);
-    padding:8px 0 max(8px, env(safe-area-inset-bottom));
-    justify-content:space-around;
-  }
-  .bottom-bar a{
-    display:flex;flex-direction:column;align-items:center;gap:4px;
-    font-size:10px;color:var(--text-dim);flex:1;padding:4px;
-  }
-  .bottom-bar a.active,.bottom-bar a:hover{color:var(--accent);}
-
   footer{
     border-top:1px solid var(--line);padding:28px;text-align:center;color:var(--text-dim);font-size:12px;
   }
@@ -326,8 +312,8 @@
       display:none;position:fixed;inset:74px 0 0 0;background:rgba(0,0,0,.5);z-index:80;
     }
     .overlay.show{display:block;}
-    .bottom-bar{display:flex;}
-    .main{padding-bottom:90px;}
+    .sidebar.open{box-shadow:8px 0 24px rgba(0,0,0,.35);}
+    .main{padding-bottom:48px;}
   }
   @media (max-width:480px){
     .nav{padding:0 16px;height:68px;}
@@ -335,7 +321,7 @@
     .logo-sub{font-size:8.5px;}
     .hero{padding:130px 16px 44px;}
     .hero h1{font-size:26px;}
-    .main{padding:24px 16px 90px;}
+    .main{padding:24px 16px 40px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;}
     .card-body{padding:10px 10px 12px;}
     .toolbar{gap:10px;}
@@ -419,21 +405,6 @@
   <div style="margin-top:6px;">воронинкострома.рф</div>
 </footer>
 
-<nav class="bottom-bar">
-  <a href="#catalog" class="active">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-    Каталог
-  </a>
-  <a href="#" id="searchIconBtn">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    Поиск
-  </a>
-  <a href="#contacts">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.68 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.32 1.85.55 2.81.68A2 2 0 0 1 22 16.92z"/></svg>
-    Контакты
-  </a>
-</nav>
-
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -478,6 +449,7 @@
     return 0;
   }
 
+  // Порядок повторяет меню исходного сайта производителя — дилеры уже к нему привыкли
   const categories = [
     { id: "koltsa", name: "Кольца", subs: [] },
     { id: "obruch", name: "Обручальные", subs: ["Гладкие", "С алмазной гранью"] },
@@ -485,9 +457,9 @@
     { id: "garnitury", name: "Гарнитуры", subs: ["С алмазной гранью", "Со вставками"] },
     { id: "podveski", name: "Подвески", subs: ["Зодиак"] },
     { id: "kolie", name: "Колье", subs: [] },
-    { id: "braslety", name: "Браслеты", subs: [] },
     { id: "piercing", name: "Пирсинг", subs: [] },
     { id: "tsepi", name: "Цепи/Браслеты (ручная работа)", subs: [] },
+    { id: "braslety", name: "Браслеты", subs: [] },
     { id: "lozhki", name: "Ложки", subs: [] },
     { id: "broshi", name: "Броши", subs: [] },
     { id: "pravoslavie", name: "Православные", subs: ["Кольца", "Подвески"] },
@@ -631,12 +603,12 @@
             
             list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
             document.getElementById("allGoodsBtn").classList.remove("active");
-          document.getElementById("newArrivalsBtn").classList.remove("active");
             document.getElementById("newArrivalsBtn").classList.remove("active");
             el.classList.add("active");
             
             document.getElementById("activeCatName").textContent = targetCategoryData.name;
             renderGrid();
+            scrollToCatalogTop();
           } else {
             el.classList.remove("open");
           }
@@ -653,6 +625,7 @@
 
           document.getElementById("activeCatName").textContent = targetCategoryData.name;
           renderGrid();
+          scrollToCatalogTop();
           closeSidebarMobile();
         }
       });
@@ -677,6 +650,7 @@
             document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
             
             renderGrid();
+            scrollToCatalogTop();
             closeSidebarMobile();
           });
         });
@@ -702,6 +676,7 @@
           document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
 
           renderGrid();
+          scrollToCatalogTop();
           closeSidebarMobile();
         });
       }
@@ -730,6 +705,13 @@
       const matchesSearch = item.sku.toLowerCase().includes(term);
       return inCategory && inSubcategory && matchesSearch;
     });
+  }
+
+  // При смене категории список мог быть проскроллен вниз — возвращаем к началу каталога,
+  // иначе новая категория открывается "с середины". При смене одной страницы (пагинация)
+  // это делает сам обработчик пагинации отдельно.
+  function scrollToCatalogTop(){
+    document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
   }
 
   function renderGrid(){
@@ -821,6 +803,7 @@
       document.getElementById("activeCatName").textContent = "Все товары";
 
       renderGrid();
+      scrollToCatalogTop();
       closeSidebarMobile();
     });
 
@@ -838,6 +821,7 @@
       document.getElementById("activeCatName").textContent = "Новинки";
 
       renderGrid();
+      scrollToCatalogTop();
       closeSidebarMobile();
     });
 
@@ -845,12 +829,6 @@
       searchTerm = e.target.value.trim();
       currentPage = 1;
       renderGrid();
-    });
-
-    document.getElementById("searchIconBtn").addEventListener("click", (e) => {
-      e.preventDefault();
-      document.getElementById("searchInput").focus();
-      document.querySelector(".main").scrollIntoView({behavior:"smooth"});
     });
 
     renderCategories();
