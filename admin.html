@@ -200,13 +200,25 @@
     tsepi: ["Браслеты"]
   };
 
-  // Текущее фото товара при редактировании (URL или относительный путь images/xxx.jpg).
+  // Текущее фото товара при редактировании — как оно РЕАЛЬНО хранится в базе (может быть
+  // просто "items3139.jpg" без "images/" — так писали старые товары с исходного сайта).
   // Пустая строка — фото не выбрано/не установлено.
   let currentImageValue = "";
 
-  function setImagePreview(url) {
+  // То же самое, что resolveImagePath в index.html: для показа превью бере путь "как есть" для
+  // ссылок/blob-объектов, а голое имя файла достраивает как "images/имя.jpg"
+  function resolveImagePathForPreview(raw) {
+    const path = String(raw || "").trim();
+    if (!path) return "";
+    if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) return path;
+    const clean = path.replace(/^\/+/, "");
+    return clean.startsWith("images/") ? clean : "images/" + clean;
+  }
+
+  function setImagePreview(rawValue) {
     const img = document.getElementById("imagePreview");
     const empty = document.getElementById("imagePreviewEmpty");
+    const url = resolveImagePathForPreview(rawValue);
     if (url) {
       img.src = url;
       img.style.display = "block";
