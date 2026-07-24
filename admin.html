@@ -6,36 +6,109 @@
   <title>Панель управления каталогом</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    /* Базовые стили для аккуратного интерфейса админки */
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f7; color: #1d1d1f; margin: 0; padding: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    h2 { margin-top: 0; font-weight: 600; }
+    :root {
+      --bg: #f2f2f7;
+      --surface: #fff;
+      --border: #e5e5ea;
+      --text: #1d1d1f;
+      --text-dim: #6e6e73;
+      --blue: #0071e3;
+      --blue-dark: #0058b0;
+      --green: #34c759;
+      --red: #ff3b30;
+      --amber: #ff9500;
+      --radius: 14px;
+      --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); margin: 0; padding: 28px 20px 60px;
+    }
+    .container { max-width: 820px; margin: 0 auto; }
+
+    .page-title { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; margin: 4px 0 22px; }
+    .page-title svg { flex: none; color: var(--blue); }
+
+    .card {
+      background: var(--surface); padding: 24px; border-radius: var(--radius);
+      box-shadow: var(--shadow); border: 1px solid rgba(0,0,0,.04); margin-bottom: 18px;
+    }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    .card-head h2 { display: flex; align-items: center; gap: 9px; margin: 0; }
+    .card-head svg { flex: none; color: var(--text-dim); }
+    h2 { margin: 0 0 18px; font-weight: 650; font-size: 17px; display: flex; align-items: center; gap: 9px; }
+    h2 svg { flex: none; color: var(--text-dim); }
+    .card-note { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 16px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .form-group { margin-bottom: 16px; }
-    label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; }
-    input, select { width: 100%; padding: 10px; border: 1px solid #d2d2d7; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-    input:focus, select:focus { outline: none; border-color: #0071e3; }
-    button { background: #0071e3; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 500; width: 100%; }
-    button:disabled { background: #86868b; }
-    .logout-btn { background: #ff3b30; margin-top: 10px; }
-    .status { padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 14px; }
-    .status.success { background: #e3f9e5; color: #1f7a27; border: 1px solid #a3e8ab; }
-    .status.error { background: #ffe5e5; color: #cf2222; border: 1px solid #fca5a5; }
-    
-    /* Стили для таблицы последних товаров */
-    .table-wrapper { overflow-x: auto; margin-top: 10px; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-    th, td { padding: 12px; border-bottom: 1px solid #e5e5ea; }
-    th { font-weight: 600; background: #f5f5f7; }
-    .delete-btn { background: #ff3b30; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; width: auto; display: inline-block; }
+    label { display: block; margin-bottom: 6px; font-weight: 550; font-size: 13.5px; color: var(--text-dim); }
+    input, select {
+      width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px;
+      box-sizing: border-box; font-size: 15px; background: #fbfbfd; color: var(--text);
+      transition: border-color .15s, background .15s;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--blue); background: #fff; }
+    input[type="file"] { padding: 9px 10px; background: #fbfbfd; }
+
+    button {
+      background: var(--blue); color: #fff; border: none; padding: 12px 20px; border-radius: 10px;
+      font-size: 15px; cursor: pointer; font-weight: 600; width: 100%;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background .15s, transform .1s;
+    }
+    button:hover { background: var(--blue-dark); }
+    button:active { transform: scale(.99); }
+    button:disabled { background: #c7c7cc; cursor: default; }
+    .btn-ghost {
+      background: transparent; color: var(--red); border: 1px solid var(--border);
+      width: auto; padding: 9px 16px; font-size: 13.5px;
+    }
+    .btn-ghost:hover { background: #fff5f5; border-color: #ffd0cc; }
+    .btn-amber { background: var(--amber); }
+    .btn-amber:hover { background: #e08600; }
+
+    .status { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; font-size: 13.5px; }
+    .status.success { background: #eaf9ec; color: #1f7a27; border: 1px solid #bdeec4; }
+    .status.error { background: #fdecec; color: #cf2222; border: 1px solid #fac7c4; }
+
+    /* Раздел разовых обслуживающих операций — визуально отделён от повседневной работы */
+    .maintenance { border: 1px dashed #e3c98a; background: #fffaf0; }
+    .maintenance .card-note { color: #8a6d1f; }
+
+    /* Стили для таблицы товаров */
+    .table-wrapper { overflow-x: auto; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13.5px; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); }
+    th { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; color: var(--text-dim); background: #fafafc; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafafc; }
+    .delete-btn, .edit-btn {
+      width: auto; padding: 5px 10px; font-size: 12px; border-radius: 7px; font-weight: 600;
+    }
+    .delete-btn { background: var(--red); color: #fff; }
+    .edit-btn { background: var(--green); color: #fff; margin-right: 4px; }
+
+    @media (max-width: 560px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
+  <div class="page-title">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    Панель управления каталогом
+  </div>
+
   <!-- Блок авторизации -->
-  <div id="authContainer" class="card">
-    <h2>Вход в панель администратора</h2>
+  <div id="authContainer" class="card" style="max-width:380px; margin:40px auto;">
+    <h2>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Вход в панель администратора
+    </h2>
     <div id="authStatus" class="status error"></div>
     <div class="form-group">
       <label>Email</label>
@@ -51,9 +124,12 @@
   <!-- Основной интерфейс админки -->
   <div id="adminInterface" style="display: none;">
     <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0;">Добавление / Изменение товара</h2>
-        <button id="logoutBtn" style="width: auto; padding: 8px 16px;" class="logout-btn">Выйти</button>
+      <div class="card-head">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+          Добавление / Изменение товара
+        </h2>
+        <button id="logoutBtn" class="btn-ghost">Выйти</button>
       </div>
 
       <div id="statusMessage" class="status"></div>
@@ -63,30 +139,32 @@
           <label>Артикул (SKU) *</label>
           <input type="text" id="sku" placeholder="Например: КП-141" required>
         </div>
-        <div class="form-group">
-          <label>Вес изделия (в граммах)</label>
-          <input type="text" id="weight" placeholder="Например: 4.25">
-        </div>
-        <div class="form-group">
-          <label>Категория *</label>
-          <!-- value = слаг, ровно в таком виде category хранится в Firestore и фильтруется на сайте -->
-          <select id="category" required>
-            <option value="">Выберите категорию</option>
-            <option value="koltsa">Кольца</option>
-            <option value="obruch">Обручальные</option>
-            <option value="sergi">Серьги</option>
-            <option value="garnitury">Гарнитуры</option>
-            <option value="podveski">Подвески</option>
-            <option value="kolie">Колье</option>
-            <option value="braslety">Браслеты</option>
-            <option value="piercing">Пирсинг</option>
-            <option value="tsepi">Цепи/Браслеты (ручная работа)</option>
-            <option value="lozhki">Ложки</option>
-            <option value="broshi">Броши</option>
-            <option value="pravoslavie">Православные</option>
-            <option value="vostok">Восток</option>
-            <option value="raznoe">Разное</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Вес изделия (в граммах)</label>
+            <input type="text" id="weight" placeholder="Например: 4.25">
+          </div>
+          <div class="form-group">
+            <label>Категория *</label>
+            <!-- value = слаг, ровно в таком виде category хранится в Firestore и фильтруется на сайте -->
+            <select id="category" required>
+              <option value="">Выберите категорию</option>
+              <option value="koltsa">Кольца</option>
+              <option value="obruch">Обручальные</option>
+              <option value="sergi">Серьги</option>
+              <option value="garnitury">Гарнитуры</option>
+              <option value="podveski">Подвески</option>
+              <option value="kolie">Колье</option>
+              <option value="braslety">Браслеты</option>
+              <option value="piercing">Пирсинг</option>
+              <option value="tsepi">Цепи/Браслеты (ручная работа)</option>
+              <option value="lozhki">Ложки</option>
+              <option value="broshi">Броши</option>
+              <option value="pravoslavie">Православные</option>
+              <option value="vostok">Восток</option>
+              <option value="raznoe">Разное</option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
           <label>Подкатегория</label>
@@ -102,45 +180,58 @@
           </div>
           <input type="file" id="imageFile" accept="image/*">
         </div>
-        <button type="submit" id="submitBtn">Сохранить в Firestore</button>
+        <button type="submit" id="submitBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+          Сохранить в Firestore
+        </button>
       </form>
     </div>
 
-    <!-- Одноразовая уборка: первая синхронизация выше создавала НОВый документ для товаров,
-         у которых артикул на исходном сайте отличался от уже сохранённого в базе (например,
-         "кбн-1-а" в базе против "кбн-01-а" на сайте) — вместо обновления старой записи получалась
-         вторая, с устаревшим артикулом и старым путём к фото. Кнопка ищет и убирает именно такие
-         "осиротевшие" записи, которых нет среди актуальных артикулов catalog.json. -->
-    <div class="card">
-      <h2>Очистка дублей после первой синхронизации</h2>
-      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
-        Разовая операция: находит записи в базе, чьего артикула больше нет в <code>catalog.json</code>
-        (остались от старого написания артикула до синхронизации), и удаляет только их.
-        Актуальные товары не трогает.
-      </p>
-      <div id="dedupeStatus" class="status"></div>
-      <button id="dedupeBtn" type="button" style="background:#ff9500;">Найти и удалить дубли</button>
-    </div>
+    <!-- Разовые обслуживающие операции — визуально отделены от повседневной работы,
+         чтобы случайно не спутать с обычным сохранением/поиском -->
+    <div class="card maintenance">
+      <h2 style="margin-bottom:4px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+        Обслуживание базы
+      </h2>
+      <p class="card-note" style="margin-bottom:20px;">Разовые операции — используются по мере необходимости, не при обычной работе с товарами.</p>
 
-    <!-- Одноразовое восстановление фото: часть товаров ссылалась на фото, которые хранились на
-         стороннем сервисе ImgBB и были случайно удалены оттуда при чистке аккаунта. Файлы этих же
-         фото уже скачаны с сайта производителя и лежат в images/ — кнопка просто переключает
-         ссылку в базе с внешней (мёртвой) на локальный файл. -->
-    <div class="card">
-      <h2>Восстановление фото с ImgBB на локальные файлы</h2>
-      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
-        Разовая операция: находит товары, у которых фото — внешняя ссылка вида .../itemsNNNN.jpg,
-        и переключает на уже скачанный локальный файл images/itemsNNNN.jpg. Нужно один раз нажать,
-        если на карточках товаров видна заглушка «изображение не найдено».
-      </p>
-      <div id="fixImagesStatus" class="status"></div>
-      <button id="fixImagesBtn" type="button" style="background:#ff9500;">Восстановить фото</button>
+      <!-- Первая синхронизация могла создать НОВый документ для товаров, у которых артикул на
+           исходном сайте отличался от уже сохранённого в базе (например, "кбн-1-а" в базе против
+           "кбн-01-а" на сайте) — вместо обновления старой записи получалась вторая, с устаревшим
+           артикулом. Кнопка ищет и убирает именно такие "осиротевшие" записи. -->
+      <div style="margin-bottom:22px;">
+        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Очистка дублей после первой синхронизации</div>
+        <p class="card-note">
+          Находит записи в базе, чьего артикула больше нет в <code>catalog.json</code>
+          (остались от старого написания артикула), и удаляет только их. Актуальные товары не трогает.
+        </p>
+        <div id="dedupeStatus" class="status"></div>
+        <button id="dedupeBtn" type="button" class="btn-amber">Найти и удалить дубли</button>
+      </div>
+
+      <!-- Часть товаров ссылалась на фото, которые хранились на стороннем сервисе ImgBB и были
+           случайно удалены оттуда при чистке аккаунта. Файлы этих же фото уже скачаны с сайта
+           производителя и лежат в images/ — кнопка переключает ссылку в базе с внешней (мёртвой)
+           на локальный файл. -->
+      <div>
+        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Восстановление фото с ImgBB на локальные файлы</div>
+        <p class="card-note">
+          Находит товары, у которых фото — внешняя ссылка вида .../itemsNNNN.jpg, и переключает на уже
+          скачанный локальный файл. Нужно нажать, если на карточках товаров видна заглушка «изображение не найдено».
+        </p>
+        <div id="fixImagesStatus" class="status"></div>
+        <button id="fixImagesBtn" type="button" class="btn-amber">Восстановить фото</button>
+      </div>
     </div>
 
     <!-- Единый список товаров: без запроса в поиске — первые 20 по возрастанию артикула,
          с запросом — совпадения, тоже по возрастанию. Одна таблица вместо двух -->
     <div class="card">
-      <h2>Товары</h2>
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Товары
+      </h2>
       <div class="form-group" style="margin-bottom: 10px;">
         <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу...">
       </div>
