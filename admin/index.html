@@ -16,7 +16,6 @@
       --blue-dark: #0058b0;
       --green: #34c759;
       --red: #ff3b30;
-      --amber: #ff9500;
       --radius: 14px;
       --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
     }
@@ -66,16 +65,10 @@
       width: auto; padding: 9px 16px; font-size: 13.5px;
     }
     .btn-ghost:hover { background: #fff5f5; border-color: #ffd0cc; }
-    .btn-amber { background: var(--amber); }
-    .btn-amber:hover { background: #e08600; }
 
     .status { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; font-size: 13.5px; }
     .status.success { background: #eaf9ec; color: #1f7a27; border: 1px solid #bdeec4; }
     .status.error { background: #fdecec; color: #cf2222; border: 1px solid #fac7c4; }
-
-    /* Раздел разовых обслуживающих операций — визуально отделён от повседневной работы */
-    .maintenance { border: 1px dashed #e3c98a; background: #fffaf0; }
-    .maintenance .card-note { color: #8a6d1f; }
 
     /* Стили для таблицы товаров */
     .table-wrapper { overflow-x: auto; margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; }
@@ -187,44 +180,6 @@
       </form>
     </div>
 
-    <!-- Разовые обслуживающие операции — визуально отделены от повседневной работы,
-         чтобы случайно не спутать с обычным сохранением/поиском -->
-    <div class="card maintenance">
-      <h2 style="margin-bottom:4px;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
-        Обслуживание базы
-      </h2>
-      <p class="card-note" style="margin-bottom:20px;">Разовые операции — используются по мере необходимости, не при обычной работе с товарами.</p>
-
-      <!-- Первая синхронизация могла создать НОВый документ для товаров, у которых артикул на
-           исходном сайте отличался от уже сохранённого в базе (например, "кбн-1-а" в базе против
-           "кбн-01-а" на сайте) — вместо обновления старой записи получалась вторая, с устаревшим
-           артикулом. Кнопка ищет и убирает именно такие "осиротевшие" записи. -->
-      <div style="margin-bottom:22px;">
-        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Очистка дублей после первой синхронизации</div>
-        <p class="card-note">
-          Находит записи в базе, чьего артикула больше нет в <code>catalog.json</code>
-          (остались от старого написания артикула), и удаляет только их. Актуальные товары не трогает.
-        </p>
-        <div id="dedupeStatus" class="status"></div>
-        <button id="dedupeBtn" type="button" class="btn-amber">Найти и удалить дубли</button>
-      </div>
-
-      <!-- Часть товаров ссылалась на фото, которые хранились на стороннем сервисе ImgBB и были
-           случайно удалены оттуда при чистке аккаунта. Файлы этих же фото уже скачаны с сайта
-           производителя и лежат в images/ — кнопка переключает ссылку в базе с внешней (мёртвой)
-           на локальный файл. -->
-      <div>
-        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Восстановление фото с ImgBB на локальные файлы</div>
-        <p class="card-note">
-          Находит товары, у которых фото — внешняя ссылка вида .../itemsNNNN.jpg, и переключает на уже
-          скачанный локальный файл. Нужно нажать, если на карточках товаров видна заглушка «изображение не найдено».
-        </p>
-        <div id="fixImagesStatus" class="status"></div>
-        <button id="fixImagesBtn" type="button" class="btn-amber">Восстановить фото</button>
-      </div>
-    </div>
-
     <!-- Единый список товаров: без запроса в поиске — первые 20 по возрастанию артикула,
          с запросом — совпадения, тоже по возрастанию. Одна таблица вместо двух -->
     <div class="card">
@@ -269,8 +224,7 @@
     setDoc,
     deleteDoc,
     getDocs,
-    serverTimestamp,
-    writeBatch
+    serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
@@ -591,126 +545,6 @@
     refreshProductsList();
   });
 
-// Находит записи в Firestore, чьего артикула нет среди актуальных артикулов catalog.json,
-// и удаляет только их. Сравнение идёт по SKU (=ID документа), поэтому актуальные товары,
-// даже если их недавно не трогали, никогда сюда не попадут.
-document.getElementById("dedupeBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("dedupeBtn");
-  const statusEl = document.getElementById("dedupeStatus");
-
-  btn.disabled = true;
-  statusEl.style.display = "none";
-  statusEl.className = "status success";
-  statusEl.innerText = "Сверяю базу с catalog.json...";
-  statusEl.style.display = "block";
-
-  try {
-    const [snapshot, catRes] = await Promise.all([
-      getDocs(collection(db, "products")),
-      fetch("catalog.json", { cache: "no-cache" })
-    ]);
-    if (!catRes.ok) throw new Error("Не удалось прочитать catalog.json (" + catRes.status + ")");
-    const catData = await catRes.json();
-    const validSkus = new Set((Array.isArray(catData) ? catData : catData.items).map(i => i.sku));
-
-    const orphanIds = [];
-    snapshot.forEach(d => { if (!validSkus.has(d.id)) orphanIds.push(d.id); });
-
-    if (orphanIds.length === 0) {
-      statusEl.className = "status success";
-      statusEl.innerText = "Дублей не найдено — база уже в порядке.";
-      return;
-    }
-
-    const preview = orphanIds.slice(0, 10).join(", ") + (orphanIds.length > 10 ? "..." : "");
-    if (!confirm(`Найдено ${orphanIds.length} устаревших записей (например: ${preview}).\nУдалить их безвозвратно?`)) {
-      statusEl.style.display = "none";
-      return;
-    }
-
-    const CHUNK = 400;
-    let deleted = 0;
-    for (let i = 0; i < orphanIds.length; i += CHUNK) {
-      const chunk = orphanIds.slice(i, i + CHUNK);
-      const batch = writeBatch(db);
-      chunk.forEach(id => batch.delete(doc(db, "products", id)));
-      await batch.commit();
-      deleted += chunk.length;
-      statusEl.innerText = `Удалено ${deleted} из ${orphanIds.length}...`;
-    }
-
-    statusEl.className = "status success";
-    statusEl.innerText = `Готово: удалено ${deleted} устаревших записей.`;
-    allProductsCache = null;
-    refreshProductsList();
-  } catch (error) {
-    console.error(error);
-    statusEl.className = "status error";
-    statusEl.innerText = "Ошибка очистки: " + error.message;
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Находит товары с внешней ссылкой на фото вида ".../itemsNNNN.jpg" (были на ImgBB, случайно
-// удалены оттуда) и переключает на локальный файл images/itemsNNNN.jpg — он уже скачан с сайта
-// производителя и лежит в репозитории.
-document.getElementById("fixImagesBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("fixImagesBtn");
-  const statusEl = document.getElementById("fixImagesStatus");
-
-  btn.disabled = true;
-  statusEl.style.display = "none";
-  statusEl.className = "status success";
-  statusEl.innerText = "Ищу товары с внешними ссылками на фото...";
-  statusEl.style.display = "block";
-
-  try {
-    const snapshot = await getDocs(collection(db, "products"));
-    const toFix = [];
-    snapshot.forEach(d => {
-      const data = d.data();
-      const img = data.image || "";
-      const m = img.match(/items(\d+)\.jpg/i);
-      if (/^https?:\/\//i.test(img) && m) {
-        toFix.push({ id: d.id, newImage: `items${m[1]}.jpg` });
-      }
-    });
-
-    if (toFix.length === 0) {
-      statusEl.className = "status success";
-      statusEl.innerText = "Внешних ссылок не найдено — всё уже локальное.";
-      return;
-    }
-
-    if (!confirm(`Найдено ${toFix.length} товаров с внешней ссылкой на фото.\nПереключить на локальные файлы (images/itemsNNNN.jpg)?`)) {
-      statusEl.style.display = "none";
-      return;
-    }
-
-    const CHUNK = 400;
-    let fixed = 0;
-    for (let i = 0; i < toFix.length; i += CHUNK) {
-      const chunk = toFix.slice(i, i + CHUNK);
-      const batch = writeBatch(db);
-      chunk.forEach(item => batch.update(doc(db, "products", item.id), { image: item.newImage, updatedAt: serverTimestamp() }));
-      await batch.commit();
-      fixed += chunk.length;
-      statusEl.innerText = `Исправлено ${fixed} из ${toFix.length}...`;
-    }
-
-    statusEl.className = "status success";
-    statusEl.innerText = `Готово: у ${fixed} товаров фото переключено на локальные файлы.`;
-    allProductsCache = null;
-    refreshProductsList();
-  } catch (error) {
-    console.error(error);
-    statusEl.className = "status error";
-    statusEl.innerText = "Ошибка: " + error.message;
-  } finally {
-    btn.disabled = false;
-  }
-});
 </script>
 </body>
 </html>
