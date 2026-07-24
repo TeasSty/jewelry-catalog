@@ -122,12 +122,12 @@
       <button id="dedupeBtn" type="button" style="background:#ff9500;">Найти и удалить дубли</button>
     </div>
 
-    <!-- Поиск по всей базе — "последние 10" ниже показывают только то, что недавно трогали,
-         поэтому старый или редко изменяемый товар там не найти -->
+    <!-- Единый список товаров: без запроса в поиске — первые 20 по возрастанию артикула,
+         с запросом — совпадения, тоже по возрастанию. Одна таблица вместо двух -->
     <div class="card">
-      <h2>Поиск товара</h2>
+      <h2>Товары</h2>
       <div class="form-group" style="margin-bottom: 10px;">
-        <input type="text" id="adminSearchInput" placeholder="Артикул полностью или частично...">
+        <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу...">
       </div>
       <div id="adminSearchStatus" style="font-size: 13px; color: #86868b; margin-bottom: 10px;"></div>
       <div class="table-wrapper">
@@ -141,26 +141,7 @@
               <th>Действие</th>
             </tr>
           </thead>
-          <tbody id="searchResultsTable"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Список последних товаров -->
-    <div class="card">
-      <h3>Последние 10 товаров</h3>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Категория</th>
-              <th>Вес</th>
-              <th>Изображение</th>
-              <th>Действие</th>
-            </tr>
-          </thead>
-          <tbody id="recentProductsTable">
+          <tbody id="productsTable">
             <tr>
               <td colspan="5" style="text-align: center; color: #86868b;">Загрузка списка...</td>
             </tr>
@@ -182,10 +163,6 @@
     setDoc,
     deleteDoc,
     getDocs,
-    query,
-    orderBy,
-    limit,
-    onSnapshot,
     serverTimestamp,
     writeBatch
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -260,20 +237,15 @@
   });
 
   // Отслеживание сессии авторизации
-  let unsubscribeRecentList = null;
-
   onAuthStateChanged(auth, (user) => {
     if (user) {
       document.getElementById("authContainer").style.display = "none";
       document.getElementById("adminInterface").style.display = "block";
-      initRecentList(); // Запускаем живую ленту товаров при входе
+      allProductsCache = null; // на случай повторного входа в этой же вкладке
+      refreshProductsList();
     } else {
       document.getElementById("authContainer").style.display = "block";
       document.getElementById("adminInterface").style.display = "none";
-      if (unsubscribeRecentList) {
-        unsubscribeRecentList();
-        unsubscribeRecentList = null;
-      }
     }
   });
 
@@ -364,7 +336,8 @@
       statusMsg.className = "status success";
       statusMsg.innerText = `Товар ${sku} успешно сохранен/обновлен!`;
       statusMsg.style.display = "block";
-      allProductsCache = null; // кэш поиска устарел после записи
+      allProductsCache = null; // кэш устарел после записи
+      refreshProductsList();
 
       // Очищаем форму для следующей записи
       document.getElementById("sku").value = "";
@@ -452,58 +425,33 @@
     });
   }
 
-  // Функция вывода последних добавленных товаров с подпиской на изменения (onSnapshot)
-  function initRecentList() {
-    const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(20));
-
-    unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
-      const tbody = document.getElementById("recentProductsTable");
-      if (snapshot.empty) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = snapshot.docs.map(docSnap => productRowHtml(docSnap.data())).join("");
-      attachRowHandlers(tbody);
-    }, (error) => {
-      console.error("Ошибка при получении списка товаров: ", error);
-    });
-  }
-
-  // Поиск по всему каталогу: Firestore не умеет искать "содержит подстроку", поэтому один раз
-  // загружаем все товары в память и дальше фильтруем на клиенте — как и на самом сайте.
-  // Кэш инвалидируется после операций, которые меняют базу (сохранение/удаление/синхронизация),
-  // чтобы следующий поиск не показывал устаревшие данные.
+  // Единый список товаров. Firestore не умеет искать "содержит подстроку", поэтому один раз
+  // за сессию загружаем весь каталог в память и дальше и список, и поиск работают из него —
+  // оба всегда по возрастанию артикула. Кэш инвалидируется после записи/удаления/очистки дублей,
+  // чтобы следующий показ не был устаревшим.
   let allProductsCache = null;
+  let currentSearchTerm = "";
 
   async function loadAllProducts(force) {
     if (allProductsCache && !force) return allProductsCache;
     const snapshot = await getDocs(collection(db, "products"));
-    allProductsCache = [];
-    snapshot.forEach(d => allProductsCache.push(d.data()));
+    allProductsCache = snapshot.docs.map(d => d.data());
+    allProductsCache.sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
     return allProductsCache;
   }
 
-  const SEARCH_RESULTS_LIMIT = 30;
+  const LIST_DISPLAY_LIMIT = 20;
 
-  document.getElementById("adminSearchInput").addEventListener("input", async (e) => {
-    const term = e.target.value.trim().toLowerCase();
-    const tbody = document.getElementById("searchResultsTable");
+  async function refreshProductsList() {
+    const tbody = document.getElementById("productsTable");
     const statusEl = document.getElementById("adminSearchStatus");
+    const term = currentSearchTerm;
 
-    if (!term) {
-      tbody.innerHTML = "";
-      statusEl.innerText = "";
-      return;
-    }
-
-    statusEl.innerText = allProductsCache ? "Поиск..." : "Загрузка каталога для поиска (один раз за сессию)...";
+    statusEl.innerText = allProductsCache ? "" : "Загрузка каталога...";
     const all = await loadAllProducts(false);
 
-    const matches = all
-      .filter(item => (item.sku || "").toLowerCase().includes(term))
-      .sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
-    const shown = matches.slice(0, SEARCH_RESULTS_LIMIT);
+    const matches = term ? all.filter(item => (item.sku || "").toLowerCase().includes(term)) : all;
+    const shown = matches.slice(0, LIST_DISPLAY_LIMIT);
 
     if (matches.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#86868b;">Ничего не найдено</td></tr>`;
@@ -511,12 +459,18 @@
       tbody.innerHTML = shown.map(productRowHtml).join("");
       attachRowHandlers(tbody, (deletedSku) => {
         allProductsCache = allProductsCache.filter(it => it.sku !== deletedSku);
+        refreshProductsList();
       });
     }
 
-    statusEl.innerText = matches.length > SEARCH_RESULTS_LIMIT
-      ? `Показано ${SEARCH_RESULTS_LIMIT} из ${matches.length} — уточните запрос`
-      : `Найдено: ${matches.length}`;
+    statusEl.innerText = matches.length > LIST_DISPLAY_LIMIT
+      ? `Показано ${LIST_DISPLAY_LIMIT} из ${matches.length}${term ? " — уточните запрос" : ""}`
+      : `Показано: ${matches.length}`;
+  }
+
+  document.getElementById("adminSearchInput").addEventListener("input", (e) => {
+    currentSearchTerm = e.target.value.trim().toLowerCase();
+    refreshProductsList();
   });
 
 // Находит записи в Firestore, чьего артикула нет среди актуальных артикулов catalog.json,
@@ -570,6 +524,7 @@ document.getElementById("dedupeBtn").addEventListener("click", async () => {
     statusEl.className = "status success";
     statusEl.innerText = `Готово: удалено ${deleted} устаревших записей.`;
     allProductsCache = null;
+    refreshProductsList();
   } catch (error) {
     console.error(error);
     statusEl.className = "status error";
