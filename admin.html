@@ -189,22 +189,22 @@
     serverTimestamp,
     writeBatch
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
-
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
     authDomain: "voronin-jewelry.firebaseapp.com",
     projectId: "voronin-jewelry",
-    storageBucket: "voronin-jewelry.firebasestorage.app",
     messagingSenderId: "1067796651938",
     appId: "1:1067796651938:web:3d89a194660765b4869cfb",
     measurementId: "G-FJ9Z8C6YG"
   };
 
+  // Бесплатный ключ с api.imgbb.com — Firebase Storage требует платный план Blaze,
+  // поэтому фото храним на ImgBB (тем же сервисом уже пользуется часть старого каталога).
+  const IMGBB_API_KEY = "ВСТАВЬТЕ_СЮДА_КЛЮЧ";
+
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const storage = getStorage(app);
 
   const CATEGORY_NAMES = {
     koltsa: "Кольца", obruch: "Обручальные", sergi: "Серьги", garnitury: "Гарнитуры",
@@ -320,17 +320,22 @@
     try {
       submitBtn.disabled = true;
 
-      // Если выбран новый файл — загружаем его в Firebase Storage и берём итоговую ссылку.
+      // Если выбран новый файл — загружаем его на ImgBB и берём итоговую ссылку.
       // Если нет — оставляем то фото, что уже было у товара (при редактировании).
       let imageValue = currentImageValue;
       if (file) {
         submitBtn.innerText = "Загружаю фото...";
-        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-        const safeSku = sku.replace(/[\/\\]/g, "_");
-        const path = `products/${safeSku}_${Date.now()}.${ext}`;
-        const fileRef = ref(storage, path);
-        await uploadBytes(fileRef, file);
-        imageValue = await getDownloadURL(fileRef);
+        const formData = new FormData();
+        formData.append("image", file);
+        const uploadRes = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+          method: "POST",
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok || !uploadData.success) {
+          throw new Error("Не удалось загрузить фото на ImgBB: " + (uploadData.error?.message || uploadRes.status));
+        }
+        imageValue = uploadData.data.url;
         submitBtn.innerText = "Сохраняю...";
       }
 
