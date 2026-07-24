@@ -377,6 +377,11 @@
       <span class="count" id="allGoodsCount" style="color:var(--text-dim);font-size:12px;font-weight:400;">...</span>
     </button>
 
+    <button class="all-goods-btn" id="newArrivalsBtn">
+      <span>Новинки</span>
+      <span class="count" id="newArrivalsCount" style="color:var(--text-dim);font-size:12px;font-weight:400;">...</span>
+    </button>
+
     <div id="categoryList"></div>
   </aside>
 
@@ -491,7 +496,9 @@
   ];
 
   const ALL = "__all__";
-  let activeCategory = ALL;   // хранит id категории из списка выше (в базе category = такой же слаг)
+  const NEW_ARRIVALS = "__new__";     // не поле в базе — вычисляется как N последних добавленных по createdAt
+  const NEW_ARRIVALS_COUNT = 20;
+  let activeCategory = ALL;   // хранит id категории из списка выше (в базе category = такой же слаг), либо ALL/NEW_ARRIVALS
   let activeSubcategory = "";
   let searchTerm = "";
   let currentPage = 1;
@@ -520,8 +527,9 @@
       const loadedProducts = [];
       querySnapshot.forEach((doc) => loadedProducts.push(normalizeProduct(doc.data(), doc.id)));
 
-      // Сортируем на клиенте: orderBy в запросе молча выбрасывает документы без поля createdAt
-      loadedProducts.sort((a, b) => b.createdAt - a.createdAt);
+      // По умолчанию сортируем по артикулу по возрастанию (с учётом чисел внутри строки:
+      // кл-3, кл-4, ... кл-30, а не как попало). "Новинки" ниже сортируются отдельно, по дате.
+      loadedProducts.sort((a, b) => a.sku.localeCompare(b.sku, "ru", { numeric: true }));
 
       rawItems = loadedProducts;
       loadingState.style.display = "none";
@@ -537,6 +545,7 @@
 
   function countFor(catId, subcatName = "") {
     if (catId === ALL) return rawItems.length;
+    if (catId === NEW_ARRIVALS) return Math.min(NEW_ARRIVALS_COUNT, rawItems.length);
     const inCat = rawItems.filter(i => i.category === catId);
     if (subcatName && !subcatName.toLowerCase().startsWith("все ")) {
       return inCat.filter(i => i.subcategory === subcatName.toLowerCase()).length;
@@ -622,6 +631,8 @@
             
             list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
             document.getElementById("allGoodsBtn").classList.remove("active");
+          document.getElementById("newArrivalsBtn").classList.remove("active");
+            document.getElementById("newArrivalsBtn").classList.remove("active");
             el.classList.add("active");
             
             document.getElementById("activeCatName").textContent = targetCategoryData.name;
@@ -637,6 +648,7 @@
 
           list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
           document.getElementById("allGoodsBtn").classList.remove("active");
+          document.getElementById("newArrivalsBtn").classList.remove("active");
           el.classList.add("active");
 
           document.getElementById("activeCatName").textContent = targetCategoryData.name;
@@ -682,6 +694,7 @@
 
           list.querySelectorAll(".cat").forEach(c => c.classList.remove("active"));
           document.getElementById("allGoodsBtn").classList.remove("active");
+          document.getElementById("newArrivalsBtn").classList.remove("active");
           el.classList.add("active");
           singleSubBtn.classList.add("active");
 
@@ -696,23 +709,27 @@
   }
 
   function getFiltered(){
-    const filtered = rawItems.filter(item => {
+    const term = searchTerm.toLowerCase();
+
+    // «Новинки» — не настоящая категория, а последние NEW_ARRIVALS_COUNT добавленных товаров
+    // по всей базе (по createdAt), отдельно от обычной сортировки по возрастанию артикула.
+    if (activeCategory === NEW_ARRIVALS) {
+      return [...rawItems]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, NEW_ARRIVALS_COUNT)
+        .filter(item => item.sku.toLowerCase().includes(term));
+    }
+
+    // rawItems уже отсортирован по возрастанию артикула при загрузке — фильтр сохраняет порядок
+    return rawItems.filter(item => {
       const inCategory = activeCategory === ALL || item.category === activeCategory;
       let inSubcategory = true;
       if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
         inSubcategory = item.subcategory === activeSubcategory;
       }
-      const matchesSearch = item.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = item.sku.toLowerCase().includes(term);
       return inCategory && inSubcategory && matchesSearch;
     });
-
-    // При активном поиске список новых товаров (сортировка "сначала новые") читается хаотично —
-    // сортируем по артикулу по возрастанию, с учётом чисел внутри строки (кл-3, кл-4, ... кл-30)
-    if (searchTerm) {
-      filtered.sort((a, b) => a.sku.localeCompare(b.sku, "ru", { numeric: true }));
-    }
-
-    return filtered;
   }
 
   function renderGrid(){
@@ -786,20 +803,40 @@
 
   function initCatalogInterface() {
     const allGoodsBtn = document.getElementById("allGoodsBtn");
+    const newArrivalsBtn = document.getElementById("newArrivalsBtn");
     document.getElementById("allGoodsCount").textContent = rawItems.length;
-    
+    document.getElementById("newArrivalsCount").textContent = countFor(NEW_ARRIVALS);
+
     allGoodsBtn.addEventListener("click", () => {
       document.querySelectorAll("#categoryList .cat").forEach(c => {
         c.classList.remove("open");
         c.classList.remove("active");
       });
-      
+
+      newArrivalsBtn.classList.remove("active");
       allGoodsBtn.classList.add("active");
       activeCategory = ALL;
       activeSubcategory = "";
       currentPage = 1;
       document.getElementById("activeCatName").textContent = "Все товары";
-      
+
+      renderGrid();
+      closeSidebarMobile();
+    });
+
+    newArrivalsBtn.addEventListener("click", () => {
+      document.querySelectorAll("#categoryList .cat").forEach(c => {
+        c.classList.remove("open");
+        c.classList.remove("active");
+      });
+
+      allGoodsBtn.classList.remove("active");
+      newArrivalsBtn.classList.add("active");
+      activeCategory = NEW_ARRIVALS;
+      activeSubcategory = "";
+      currentPage = 1;
+      document.getElementById("activeCatName").textContent = "Новинки";
+
       renderGrid();
       closeSidebarMobile();
     });

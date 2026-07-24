@@ -500,7 +500,9 @@
     statusEl.innerText = allProductsCache ? "Поиск..." : "Загрузка каталога для поиска (один раз за сессию)...";
     const all = await loadAllProducts(false);
 
-    const matches = all.filter(item => (item.sku || "").toLowerCase().includes(term));
+    const matches = all
+      .filter(item => (item.sku || "").toLowerCase().includes(term))
+      .sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
     const shown = matches.slice(0, SEARCH_RESULTS_LIMIT);
 
     if (matches.length === 0) {
