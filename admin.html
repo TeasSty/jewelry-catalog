@@ -95,37 +95,15 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Название файла изображения</label>
-          <input type="text" id="imageName" placeholder="Например: kp-141.jpg">
+          <label>Фото товара</label>
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+            <img id="imagePreview" style="width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid #d2d2d7; display:none;">
+            <span id="imagePreviewEmpty" style="color:#86868b; font-size:13px;">Фото не выбрано</span>
+          </div>
+          <input type="file" id="imageFile" accept="image/*">
         </div>
         <button type="submit" id="submitBtn">Сохранить в Firestore</button>
       </form>
-    </div>
-
-    <!-- Экспорт каталога в статический файл: сайт читает его вместо Firestore, чтобы не тратить квоту чтений -->
-    <div class="card">
-      <h2>Публикация каталога на сайт</h2>
-      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
-        Сайт по умолчанию показывает не «живую» базу, а последний выгруженный файл <code>catalog.json</code>.
-        После любых изменений товаров нажмите кнопку, скачайте файл и загрузите (замените) его в корне репозитория на GitHub,
-        рядом с <code>index.html</code>.
-      </p>
-      <div id="exportStatus" class="status"></div>
-      <button id="exportBtn" type="button">Скачать catalog.json</button>
-    </div>
-
-    <!-- Разовая синхронизация: полный каталог (2982 товара), собранный с исходного сайта,
-         пока существует только в файле catalog.json. Firestore ещё не знает о новых товарах —
-         эта кнопка один раз загружает их в базу, чтобы Экспорт выше больше не терял данные. -->
-    <div class="card">
-      <h2>Синхронизация полного каталога с базой</h2>
-      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
-        Одноразовая операция: загружает все товары из <code>catalog.json</code> в Firestore (создаёт недостающие,
-        обновляет фото у существующих). Ничего не удаляет. Нужно один раз нажать после того, как в проект добавлен
-        полный каталог с фотографиями.
-      </p>
-      <div id="syncStatus" class="status"></div>
-      <button id="syncBtn" type="button">Синхронизировать каталог.json в Firestore</button>
     </div>
 
     <!-- Одноразовая уборка: первая синхронизация выше создавала НОВый документ для товаров,
@@ -211,11 +189,13 @@
     serverTimestamp,
     writeBatch
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
     authDomain: "voronin-jewelry.firebaseapp.com",
     projectId: "voronin-jewelry",
+    storageBucket: "voronin-jewelry.firebasestorage.app",
     messagingSenderId: "1067796651938",
     appId: "1:1067796651938:web:3d89a194660765b4869cfb",
     measurementId: "G-FJ9Z8C6YG"
@@ -224,6 +204,7 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const storage = getStorage(app);
 
   const CATEGORY_NAMES = {
     koltsa: "Кольца", obruch: "Обручальные", sergi: "Серьги", garnitury: "Гарнитуры",
@@ -241,6 +222,29 @@
     kolie: ["Золотые", "Серебряные"],
     tsepi: ["Браслеты"]
   };
+
+  // Текущее фото товара при редактировании (URL или относительный путь images/xxx.jpg).
+  // Пустая строка — фото не выбрано/не установлено.
+  let currentImageValue = "";
+
+  function setImagePreview(url) {
+    const img = document.getElementById("imagePreview");
+    const empty = document.getElementById("imagePreviewEmpty");
+    if (url) {
+      img.src = url;
+      img.style.display = "block";
+      empty.style.display = "none";
+    } else {
+      img.style.display = "none";
+      empty.style.display = "block";
+    }
+  }
+
+  // Показываем превью сразу после выбора файла, не дожидаясь загрузки на сервер
+  document.getElementById("imageFile").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) setImagePreview(URL.createObjectURL(file));
+  });
 
   // Переключение подкатегорий
   document.getElementById("category").addEventListener("change", (e) => {
@@ -301,7 +305,7 @@
     const weight = document.getElementById("weight").value.trim();
     const category = document.getElementById("category").value;
     const subcategory = document.getElementById("subcategory").value;
-    let imageName = document.getElementById("imageName").value.trim();
+    const file = document.getElementById("imageFile").files[0];
 
     statusMsg.style.display = "none";
 
@@ -313,14 +317,22 @@
       return;
     }
 
-    // Внешние ссылки (i.ibb.co и т.п.) оставляем как есть, имя файла превращаем в путь внутри images/
-    if (imageName && !/^https?:\/\//i.test(imageName)) {
-      imageName = imageName.replace(/^\/+/, "");
-      if (!imageName.startsWith("images/")) imageName = "images/" + imageName;
-    }
-
     try {
       submitBtn.disabled = true;
+
+      // Если выбран новый файл — загружаем его в Firebase Storage и берём итоговую ссылку.
+      // Если нет — оставляем то фото, что уже было у товара (при редактировании).
+      let imageValue = currentImageValue;
+      if (file) {
+        submitBtn.innerText = "Загружаю фото...";
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+        const safeSku = sku.replace(/[\/\\]/g, "_");
+        const path = `products/${safeSku}_${Date.now()}.${ext}`;
+        const fileRef = ref(storage, path);
+        await uploadBytes(fileRef, file);
+        imageValue = await getDownloadURL(fileRef);
+        submitBtn.innerText = "Сохраняю...";
+      }
 
       const docRef = doc(db, "products", sku);
       const docSnap = await getDoc(docRef);
@@ -332,7 +344,7 @@
         weight: weight === "" ? "" : (parseFloat(weight.replace(",", ".")) || 0),
         category: category,
         subcategory: subcategory || null,
-        image: imageName,
+        image: imageValue,
         updatedAt: serverTimestamp() // Фиксируем дату изменения всегда
       };
 
@@ -352,15 +364,18 @@
       // Очищаем форму для следующей записи
       document.getElementById("sku").value = "";
       document.getElementById("weight").value = "";
-      document.getElementById("imageName").value = "";
+      document.getElementById("imageFile").value = "";
+      currentImageValue = "";
+      setImagePreview("");
 
     } catch (error) {
       console.error(error);
       statusMsg.className = "status error";
-      statusMsg.innerText = "Ошибка Firestore: " + error.message;
+      statusMsg.innerText = "Ошибка: " + error.message;
       statusMsg.style.display = "block";
     } finally {
       submitBtn.disabled = false;
+      submitBtn.innerText = "Сохранить в Firestore";
     }
   });
 
@@ -396,12 +411,7 @@
         const weight = row.dataset.weight;
         const category = row.dataset.category;
         const subcategory = row.dataset.subcategory;
-        let img = row.dataset.img;
-
-        // Отрезаем "images/", если он есть, чтобы админу было удобно видеть чистое имя файла
-        if (img && img.startsWith("images/")) {
-          img = img.replace("images/", "");
-        }
+        const img = row.dataset.img;
 
         document.getElementById("sku").value = sku;
         document.getElementById("weight").value = weight;
@@ -411,7 +421,11 @@
         document.getElementById("category").dispatchEvent(event);
 
         document.getElementById("subcategory").value = subcategory;
-        document.getElementById("imageName").value = img;
+
+        // Показываем текущее фото товара; выбирать новое нужно только если хотим его заменить
+        currentImageValue = img || "";
+        document.getElementById("imageFile").value = "";
+        setImagePreview(currentImageValue);
 
         document.getElementById("productForm").scrollIntoView({ behavior: "smooth", block: "center" });
         document.getElementById("weight").focus();
@@ -497,118 +511,6 @@
       ? `Показано ${SEARCH_RESULTS_LIMIT} из ${matches.length} — уточните запрос`
       : `Найдено: ${matches.length}`;
   });
-
-// Экспорт всей коллекции products в catalog.json — сайт читает этот файл вместо живых
-// запросов к Firestore, что не тратит дневную квоту бесплатного плана на чтения.
-document.getElementById("exportBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("exportBtn");
-  const statusEl = document.getElementById("exportStatus");
-
-  btn.disabled = true;
-  statusEl.style.display = "none";
-
-  try {
-    const snapshot = await getDocs(collection(db, "products"));
-    const items = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      items.push({
-        sku: data.sku || docSnap.id,
-        weight: data.weight ?? "",
-        category: data.category || "",
-        subcategory: data.subcategory || "",
-        image: data.image || data.img || "",
-        // Firestore Timestamp не сериализуется в JSON напрямую — переводим в ISO-строку
-        createdAt: data.createdAt && typeof data.createdAt.toDate === "function"
-          ? data.createdAt.toDate().toISOString()
-          : (data.createdAt || null)
-      });
-    });
-
-    const blob = new Blob([JSON.stringify({ items }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "catalog.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-
-    statusEl.className = "status success";
-    statusEl.innerText = `Готово: выгружено ${items.length} товаров. Загрузите файл catalog.json в репозиторий на GitHub, заменив старый.`;
-    statusEl.style.display = "block";
-  } catch (error) {
-    console.error(error);
-    statusEl.className = "status error";
-    statusEl.innerText = "Ошибка экспорта: " + error.message;
-    statusEl.style.display = "block";
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Разовая синхронизация: читает catalog.json (собранный с исходного сайта) и записывает
-// каждый товар в Firestore с merge:true по SKU, чтобы не создавать дубликаты и не терять
-// существующие поля. Пишет пачками по 400 операций — лимит Firestore на batch составляет 500.
-document.getElementById("syncBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("syncBtn");
-  const statusEl = document.getElementById("syncStatus");
-
-  btn.disabled = true;
-  statusEl.style.display = "none";
-  statusEl.className = "status success";
-  statusEl.innerText = "Загружаю catalog.json...";
-  statusEl.style.display = "block";
-
-  try {
-    const res = await fetch("catalog.json", { cache: "no-cache" });
-    if (!res.ok) throw new Error("Не удалось прочитать catalog.json (" + res.status + ")");
-    const data = await res.json();
-    const items = Array.isArray(data) ? data : data.items;
-    if (!Array.isArray(items) || items.length === 0) throw new Error("catalog.json пуст или повреждён");
-
-    const CHUNK = 400;
-    let written = 0;
-
-    for (let i = 0; i < items.length; i += CHUNK) {
-      const chunk = items.slice(i, i + CHUNK);
-      const batch = writeBatch(db);
-
-      for (const item of chunk) {
-        if (!item.sku) continue;
-        const docRef = doc(db, "products", item.sku);
-        const payload = {
-          sku: item.sku,
-          name: item.sku,
-          weight: item.weight === "" || item.weight == null ? "" : Number(item.weight),
-          category: item.category || "",
-          subcategory: item.subcategory || null,
-          image: item.image || "",
-          updatedAt: serverTimestamp()
-        };
-        if (item.createdAt) {
-          payload.createdAt = item.createdAt;
-        }
-        batch.set(docRef, payload, { merge: true });
-      }
-
-      await batch.commit();
-      written += chunk.length;
-      statusEl.innerText = `Записано ${written} из ${items.length}...`;
-    }
-
-    statusEl.className = "status success";
-    statusEl.innerText = `Готово: синхронизировано ${written} товаров с Firestore.`;
-    allProductsCache = null; // кэш поиска устарел после синхронизации
-  } catch (error) {
-    console.error(error);
-    statusEl.className = "status error";
-    statusEl.innerText = "Ошибка синхронизации: " + error.message;
-  } finally {
-    btn.disabled = false;
-  }
-});
 
 // Находит записи в Firestore, чьего артикула нет среди актуальных артикулов catalog.json,
 // и удаляет только их. Сравнение идёт по SKU (=ID документа), поэтому актуальные товары,

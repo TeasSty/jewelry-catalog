@@ -508,42 +508,17 @@
     };
   }
 
-  // Основной источник — статический catalog.json: он не тратит квоту чтений Firestore.
-  // Файл выгружается кнопкой в admin.html и коммитится в репозиторий.
-  async function loadFromCache() {
-    const res = await fetch("catalog.json", { cache: "no-cache" });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const items = Array.isArray(data) ? data : data.items;
-    if (!Array.isArray(items) || items.length === 0) return null;
-    return items.map(item => normalizeProduct(item));
-  }
-
-  async function loadFromFirestore() {
-    const querySnapshot = await getDocs(collection(db, "products"));
-    const loaded = [];
-    querySnapshot.forEach((doc) => loaded.push(normalizeProduct(doc.data(), doc.id)));
-    return loaded;
-  }
-
+  // Читаем каталог напрямую из Firestore — правки из admin.html видны на сайте сразу,
+  // без отдельного шага публикации через статический файл.
   async function loadCatalog() {
     const loadingState = document.getElementById("loadingState");
     const errorState = document.getElementById("errorState");
     const productGrid = document.getElementById("productGrid");
 
     try {
-      let loadedProducts = null;
-
-      try {
-        loadedProducts = await loadFromCache();
-      } catch (cacheError) {
-        // Нет файла или он битый — не страшно, просто идём в Firestore
-        console.warn("catalog.json недоступен, читаю Firestore:", cacheError);
-      }
-
-      if (!loadedProducts) {
-        loadedProducts = await loadFromFirestore();
-      }
+      const querySnapshot = await getDocs(collection(db, "products"));
+      const loadedProducts = [];
+      querySnapshot.forEach((doc) => loadedProducts.push(normalizeProduct(doc.data(), doc.id)));
 
       // Сортируем на клиенте: orderBy в запросе молча выбрасывает документы без поля createdAt
       loadedProducts.sort((a, b) => b.createdAt - a.createdAt);
