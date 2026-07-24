@@ -481,10 +481,23 @@
   let currentPage = 1;
 
   // Приводим документ из любого источника к тому виду, с которым работает интерфейс
+  // Приводит артикул к виду для нечёткого поиска: без регистра, без дефисов/пробелов/точек,
+  // без ведущих нулей в числах — чтобы "93", "093", "кл93" и "КЛ-93" находили один и тот же товар.
+  // Ведущие нули убираются у каждого числового куска отдельно, а не у всей строки — иначе
+  // "кл-100" превратился бы в "кл-1", потеряв разницу с "кл-1".
+  function normalizeForSearch(str){
+    return String(str || "")
+      .toLowerCase()
+      .replace(/[\s\-_./\\]+/g, "")
+      .replace(/\d+/g, (digits) => digits.replace(/^0+(?=\d)/, ""));
+  }
+
   function normalizeProduct(data, fallbackId = "") {
+    const sku = data.sku || fallbackId;
     return {
       img: resolveImagePath(data.image || data.img || ""),
-      sku: data.sku || fallbackId,
+      sku: sku,
+      skuNorm: normalizeForSearch(sku), // считаем один раз при загрузке, а не на каждый ре-рендер
       weight: data.weight ?? "",
       category: (data.category || "").toLowerCase(),
       subcategory: (data.subcategory || "").toLowerCase(),
@@ -689,7 +702,9 @@
   }
 
   function getFiltered(){
-    const term = searchTerm.toLowerCase();
+    // Сравниваем по нормализованному артикулу (skuNorm уже посчитан один раз при загрузке) —
+    // так поиск не зависит от регистра, дефисов/пробелов и ведущих нулей.
+    const term = normalizeForSearch(searchTerm);
 
     // «Новинки» — не настоящая категория, а последние NEW_ARRIVALS_COUNT добавленных товаров
     // по всей базе (по createdAt), отдельно от обычной сортировки по возрастанию артикула.
@@ -697,7 +712,7 @@
       return [...rawItems]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, NEW_ARRIVALS_COUNT)
-        .filter(item => item.sku.toLowerCase().includes(term));
+        .filter(item => item.skuNorm.includes(term));
     }
 
     // "Все товары": плоская сортировка по артикулу мешает категории вперемешку (цепочка и брошь
@@ -705,7 +720,7 @@
     // в том же порядке, что и в сайдбаре, — а внутри категории уже по возрастанию артикула.
     if (activeCategory === ALL) {
       return rawItems
-        .filter(item => item.sku.toLowerCase().includes(term))
+        .filter(item => item.skuNorm.includes(term))
         .sort((a, b) => {
           const orderDiff = (CATEGORY_ORDER.get(a.category) ?? 999) - (CATEGORY_ORDER.get(b.category) ?? 999);
           return orderDiff !== 0 ? orderDiff : a.sku.localeCompare(b.sku, "ru", { numeric: true });
@@ -719,7 +734,7 @@
       if (activeSubcategory && !activeSubcategory.startsWith("все ")) {
         inSubcategory = item.subcategory === activeSubcategory;
       }
-      const matchesSearch = item.sku.toLowerCase().includes(term);
+      const matchesSearch = item.skuNorm.includes(term);
       return inCategory && inSubcategory && matchesSearch;
     });
   }

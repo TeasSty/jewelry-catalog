@@ -497,6 +497,15 @@
     });
   }
 
+  // Приводит артикул к виду для нечёткого поиска: без регистра, без дефисов/пробелов/точек,
+  // без ведущих нулей в числах — чтобы "93", "093", "кл93" и "КЛ-93" находили один и тот же товар.
+  function normalizeForSearch(str){
+    return String(str || "")
+      .toLowerCase()
+      .replace(/[\s\-_./\\]+/g, "")
+      .replace(/\d+/g, (digits) => digits.replace(/^0+(?=\d)/, ""));
+  }
+
   // Единый список товаров. Firestore не умеет искать "содержит подстроку", поэтому один раз
   // за сессию загружаем весь каталог в память и дальше и список, и поиск работают из него —
   // оба всегда по возрастанию артикула. Кэш инвалидируется после записи/удаления/очистки дублей,
@@ -508,6 +517,7 @@
     if (allProductsCache && !force) return allProductsCache;
     const snapshot = await getDocs(collection(db, "products"));
     allProductsCache = snapshot.docs.map(d => d.data());
+    allProductsCache.forEach(item => { item.skuNorm = normalizeForSearch(item.sku); });
     allProductsCache.sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
     return allProductsCache;
   }
@@ -522,7 +532,7 @@
     statusEl.innerText = allProductsCache ? "" : "Загрузка каталога...";
     const all = await loadAllProducts(false);
 
-    const matches = term ? all.filter(item => (item.sku || "").toLowerCase().includes(term)) : all;
+    const matches = term ? all.filter(item => item.skuNorm.includes(term)) : all;
     const shown = matches.slice(0, LIST_DISPLAY_LIMIT);
 
     if (matches.length === 0) {
@@ -541,7 +551,7 @@
   }
 
   document.getElementById("adminSearchInput").addEventListener("input", (e) => {
-    currentSearchTerm = e.target.value.trim().toLowerCase();
+    currentSearchTerm = normalizeForSearch(e.target.value);
     refreshProductsList();
   });
 
