@@ -128,6 +128,46 @@
       <button id="syncBtn" type="button">Синхронизировать каталог.json в Firestore</button>
     </div>
 
+    <!-- Одноразовая уборка: первая синхронизация выше создавала НОВый документ для товаров,
+         у которых артикул на исходном сайте отличался от уже сохранённого в базе (например,
+         "кбн-1-а" в базе против "кбн-01-а" на сайте) — вместо обновления старой записи получалась
+         вторая, с устаревшим артикулом и старым путём к фото. Кнопка ищет и убирает именно такие
+         "осиротевшие" записи, которых нет среди актуальных артикулов catalog.json. -->
+    <div class="card">
+      <h2>Очистка дублей после первой синхронизации</h2>
+      <p style="font-size: 14px; color: #6e6e73; margin: 0 0 14px;">
+        Разовая операция: находит записи в базе, чьего артикула больше нет в <code>catalog.json</code>
+        (остались от старого написания артикула до синхронизации), и удаляет только их.
+        Актуальные товары не трогает.
+      </p>
+      <div id="dedupeStatus" class="status"></div>
+      <button id="dedupeBtn" type="button" style="background:#ff9500;">Найти и удалить дубли</button>
+    </div>
+
+    <!-- Поиск по всей базе — "последние 10" ниже показывают только то, что недавно трогали,
+         поэтому старый или редко изменяемый товар там не найти -->
+    <div class="card">
+      <h2>Поиск товара</h2>
+      <div class="form-group" style="margin-bottom: 10px;">
+        <input type="text" id="adminSearchInput" placeholder="Артикул полностью или частично...">
+      </div>
+      <div id="adminSearchStatus" style="font-size: 13px; color: #86868b; margin-bottom: 10px;"></div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Категория</th>
+              <th>Вес</th>
+              <th>Изображение</th>
+              <th>Действие</th>
+            </tr>
+          </thead>
+          <tbody id="searchResultsTable"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Список последних товаров -->
     <div class="card">
       <h3>Последние 10 товаров</h3>
@@ -307,6 +347,7 @@
       statusMsg.className = "status success";
       statusMsg.innerText = `Товар ${sku} успешно сохранен/обновлен!`;
       statusMsg.style.display = "block";
+      allProductsCache = null; // кэш поиска устарел после записи
 
       // Очищаем форму для следующей записи
       document.getElementById("sku").value = "";
@@ -323,48 +364,34 @@
     }
   });
 
-  // Функция вывода последних добавленных товаров с подпиской на изменения (onSnapshot)
-function initRecentList() {
-  const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(20));
-  
-  unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
-    const tbody = document.getElementById("recentProductsTable");
-    if (snapshot.empty) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
-      return;
-    }
+  // Общий рендер строки таблицы товаров — используется и "последними 10", и результатами поиска
+  function productRowHtml(item) {
+    const image = item.image || item.img || "";
+    return `
+      <tr id="row-${item.sku}"
+          data-sku="${item.sku || ""}"
+          data-weight="${item.weight ?? ""}"
+          data-category="${item.category || ""}"
+          data-subcategory="${item.subcategory || ""}"
+          data-img="${image}">
+        <td><strong>${item.sku || ""}</strong></td>
+        <td>${CATEGORY_NAMES[item.category] || item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
+        <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
+        <td><span style="font-size: 11px; color: #86868b;">${image || "—"}</span></td>
+        <td>
+          <button class="edit-btn" style="background:#34c759; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:none; margin-right:4px;">Редактировать</button>
+          <button class="delete-btn" data-sku="${item.sku}">Удалить</button>
+        </td>
+      </tr>
+    `;
+  }
 
-    let html = "";
-    snapshot.forEach((docSnap) => {
-      const item = docSnap.data();
-      const image = item.image || item.img || "";
-      // Сохраняем все данные в data-* атрибуты строки для быстрого редактирования без запросов к БД
-      html += `
-        <tr id="row-${item.sku}"
-            data-sku="${item.sku || ""}"
-            data-weight="${item.weight ?? ""}"
-            data-category="${item.category || ""}"
-            data-subcategory="${item.subcategory || ""}"
-            data-img="${image}">
-          <td><strong>${item.sku || ""}</strong></td>
-          <td>${CATEGORY_NAMES[item.category] || item.category || ""} <span style="font-size:11px;color:#86868b;">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
-          <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
-          <td><span style="font-size: 11px; color: #86868b;">${image || "—"}</span></td>
-          <td>
-            <button class="edit-btn" style="background:#34c759; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; cursor:pointer; border:none; margin-right:4px;">Редактировать</button>
-            <button class="delete-btn" data-sku="${item.sku}">Удалить</button>
-          </td>
-        </tr>
-      `;
-    });
-    tbody.innerHTML = html;
-
-    // ОБРАБОТЧИК КНОПКИ РЕДАКТИРОВАНИЯ
+  // Общие обработчики кнопок Редактировать/Удалить для любой таблицы, отрисованной через productRowHtml
+  function attachRowHandlers(tbody, onDeleted) {
     tbody.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", (e) => {
         const row = e.target.closest("tr");
-        
-        // Извлекаем данные из дата-атрибутов строки таблицы
+
         const sku = row.dataset.sku;
         const weight = row.dataset.weight;
         const category = row.dataset.category;
@@ -376,42 +403,100 @@ function initRecentList() {
           img = img.replace("images/", "");
         }
 
-        // Заполняем форму
         document.getElementById("sku").value = sku;
         document.getElementById("weight").value = weight;
         document.getElementById("category").value = category;
-        
-        // Триггерим событие изменения категории, чтобы обновить список подкатегорий
+
         const event = new Event('change');
         document.getElementById("category").dispatchEvent(event);
-        
-        // Устанавливаем подкатегорию после обновления списка
+
         document.getElementById("subcategory").value = subcategory;
         document.getElementById("imageName").value = img;
 
-        // Скроллим к форме и подсвечиваем SKU
         document.getElementById("productForm").scrollIntoView({ behavior: "smooth", block: "center" });
-        document.getElementById("weight").focus(); // Фокус на вес, так как SKU менять обычно не нужно
+        document.getElementById("weight").focus();
       });
     });
 
-    // Обработчик удаления (остается прежним)
     tbody.querySelectorAll(".delete-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         const skuToDelete = e.target.dataset.sku;
         if (confirm(`Вы уверены, что хотите безвозвратно удалить товар ${skuToDelete}?`)) {
           try {
             await deleteDoc(doc(db, "products", skuToDelete));
+            if (onDeleted) onDeleted(skuToDelete);
           } catch (err) {
             alert("Ошибка при удалении: " + err.message);
           }
         }
       });
     });
-  }, (error) => {
-    console.error("Ошибка при получении списка товаров: ", error);
+  }
+
+  // Функция вывода последних добавленных товаров с подпиской на изменения (onSnapshot)
+  function initRecentList() {
+    const recentQuery = query(collection(db, "products"), orderBy("updatedAt", "desc"), limit(20));
+
+    unsubscribeRecentList = onSnapshot(recentQuery, (snapshot) => {
+      const tbody = document.getElementById("recentProductsTable");
+      if (snapshot.empty) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #86868b;">Нет добавленных товаров</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = snapshot.docs.map(docSnap => productRowHtml(docSnap.data())).join("");
+      attachRowHandlers(tbody);
+    }, (error) => {
+      console.error("Ошибка при получении списка товаров: ", error);
+    });
+  }
+
+  // Поиск по всему каталогу: Firestore не умеет искать "содержит подстроку", поэтому один раз
+  // загружаем все товары в память и дальше фильтруем на клиенте — как и на самом сайте.
+  // Кэш инвалидируется после операций, которые меняют базу (сохранение/удаление/синхронизация),
+  // чтобы следующий поиск не показывал устаревшие данные.
+  let allProductsCache = null;
+
+  async function loadAllProducts(force) {
+    if (allProductsCache && !force) return allProductsCache;
+    const snapshot = await getDocs(collection(db, "products"));
+    allProductsCache = [];
+    snapshot.forEach(d => allProductsCache.push(d.data()));
+    return allProductsCache;
+  }
+
+  const SEARCH_RESULTS_LIMIT = 30;
+
+  document.getElementById("adminSearchInput").addEventListener("input", async (e) => {
+    const term = e.target.value.trim().toLowerCase();
+    const tbody = document.getElementById("searchResultsTable");
+    const statusEl = document.getElementById("adminSearchStatus");
+
+    if (!term) {
+      tbody.innerHTML = "";
+      statusEl.innerText = "";
+      return;
+    }
+
+    statusEl.innerText = allProductsCache ? "Поиск..." : "Загрузка каталога для поиска (один раз за сессию)...";
+    const all = await loadAllProducts(false);
+
+    const matches = all.filter(item => (item.sku || "").toLowerCase().includes(term));
+    const shown = matches.slice(0, SEARCH_RESULTS_LIMIT);
+
+    if (matches.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#86868b;">Ничего не найдено</td></tr>`;
+    } else {
+      tbody.innerHTML = shown.map(productRowHtml).join("");
+      attachRowHandlers(tbody, (deletedSku) => {
+        allProductsCache = allProductsCache.filter(it => it.sku !== deletedSku);
+      });
+    }
+
+    statusEl.innerText = matches.length > SEARCH_RESULTS_LIMIT
+      ? `Показано ${SEARCH_RESULTS_LIMIT} из ${matches.length} — уточните запрос`
+      : `Найдено: ${matches.length}`;
   });
-}
 
 // Экспорт всей коллекции products в catalog.json — сайт читает этот файл вместо живых
 // запросов к Firestore, что не тратит дневную квоту бесплатного плана на чтения.
@@ -515,10 +600,71 @@ document.getElementById("syncBtn").addEventListener("click", async () => {
 
     statusEl.className = "status success";
     statusEl.innerText = `Готово: синхронизировано ${written} товаров с Firestore.`;
+    allProductsCache = null; // кэш поиска устарел после синхронизации
   } catch (error) {
     console.error(error);
     statusEl.className = "status error";
     statusEl.innerText = "Ошибка синхронизации: " + error.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Находит записи в Firestore, чьего артикула нет среди актуальных артикулов catalog.json,
+// и удаляет только их. Сравнение идёт по SKU (=ID документа), поэтому актуальные товары,
+// даже если их недавно не трогали, никогда сюда не попадут.
+document.getElementById("dedupeBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("dedupeBtn");
+  const statusEl = document.getElementById("dedupeStatus");
+
+  btn.disabled = true;
+  statusEl.style.display = "none";
+  statusEl.className = "status success";
+  statusEl.innerText = "Сверяю базу с catalog.json...";
+  statusEl.style.display = "block";
+
+  try {
+    const [snapshot, catRes] = await Promise.all([
+      getDocs(collection(db, "products")),
+      fetch("catalog.json", { cache: "no-cache" })
+    ]);
+    if (!catRes.ok) throw new Error("Не удалось прочитать catalog.json (" + catRes.status + ")");
+    const catData = await catRes.json();
+    const validSkus = new Set((Array.isArray(catData) ? catData : catData.items).map(i => i.sku));
+
+    const orphanIds = [];
+    snapshot.forEach(d => { if (!validSkus.has(d.id)) orphanIds.push(d.id); });
+
+    if (orphanIds.length === 0) {
+      statusEl.className = "status success";
+      statusEl.innerText = "Дублей не найдено — база уже в порядке.";
+      return;
+    }
+
+    const preview = orphanIds.slice(0, 10).join(", ") + (orphanIds.length > 10 ? "..." : "");
+    if (!confirm(`Найдено ${orphanIds.length} устаревших записей (например: ${preview}).\nУдалить их безвозвратно?`)) {
+      statusEl.style.display = "none";
+      return;
+    }
+
+    const CHUNK = 400;
+    let deleted = 0;
+    for (let i = 0; i < orphanIds.length; i += CHUNK) {
+      const chunk = orphanIds.slice(i, i + CHUNK);
+      const batch = writeBatch(db);
+      chunk.forEach(id => batch.delete(doc(db, "products", id)));
+      await batch.commit();
+      deleted += chunk.length;
+      statusEl.innerText = `Удалено ${deleted} из ${orphanIds.length}...`;
+    }
+
+    statusEl.className = "status success";
+    statusEl.innerText = `Готово: удалено ${deleted} устаревших записей.`;
+    allProductsCache = null;
+  } catch (error) {
+    console.error(error);
+    statusEl.className = "status error";
+    statusEl.innerText = "Ошибка очистки: " + error.message;
   } finally {
     btn.disabled = false;
   }
