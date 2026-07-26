@@ -307,7 +307,10 @@
   .modal-close:hover{color:var(--text);}
 
   .notice-box{text-align:center;padding-top:34px;}
-  .notice-icon{font-size:38px;line-height:1;margin-bottom:10px;}
+  .notice-icon{display:flex;justify-content:center;margin-bottom:14px;color:var(--text-dim);}
+  .notice-icon svg{width:40px;height:40px;}
+  .notice-icon.success{color:var(--accent);}
+  .notice-icon.error{color:#ef5350;}
   .notice-box h3{font-size:17px;margin-bottom:8px;}
   .notice-box p{font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;}
 
@@ -574,7 +577,7 @@
 <div class="modal-overlay" id="noticeOverlay">
   <div class="modal-box notice-box">
     <button class="modal-close" id="noticeClose" aria-label="Закрыть">&times;</button>
-    <div class="notice-icon" id="noticeIcon">✅</div>
+    <div class="notice-icon" id="noticeIcon"></div>
     <h3 id="noticeTitle"></h3>
     <p id="noticeText"></p>
     <button class="primary-btn" id="noticeOkBtn" type="button">Понятно</button>
@@ -1305,9 +1308,18 @@
   cartOverlay.addEventListener("click", (e) => { if(e.target === cartOverlay) cartOverlay.classList.remove("show"); });
 
   // ===== УВЕДОМЛЕНИЯ (вместо системных alert()) =====
+  // Иконки — обводкой, в тон сайту (золото/красный), а не цветные эмодзи-смайлы.
+  const NOTICE_ICONS = {
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7.5" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>'
+  };
+
   const noticeOverlay = document.getElementById("noticeOverlay");
   function showNotice(text, opts = {}){
-    document.getElementById("noticeIcon").textContent = opts.icon || "✅";
+    const type = opts.type || "success";
+    const iconEl = document.getElementById("noticeIcon");
+    iconEl.className = "notice-icon " + type;
+    iconEl.innerHTML = NOTICE_ICONS[type] || NOTICE_ICONS.success;
     document.getElementById("noticeTitle").textContent = opts.title || "";
     document.getElementById("noticeText").textContent = text;
     noticeOverlay.classList.add("show");
@@ -1424,7 +1436,7 @@
       document.getElementById("authPasswordInput").value = "";
       renderCart();
       if(cart.length > 0) cartOverlay.classList.add("show");
-      if(justRegistered) showNotice(`На ${email} отправлено письмо для подтверждения почты.`, { title: "Регистрация успешна!", icon: "🎉" });
+      if(justRegistered) showNotice(`На ${email} отправлено письмо для подтверждения почты.`, { title: "Регистрация успешна!", type: "success" });
     } catch(err) {
       errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || err.message;
       errEl.style.display = "block";
@@ -1504,9 +1516,9 @@
       document.getElementById("orderPhone").value = "";
       document.getElementById("orderComment").value = "";
       cartOverlay.classList.remove("show");
-      showNotice("Мы свяжемся с вами по указанному телефону.", { title: "Заказ отправлен!", icon: "✅" });
+      showNotice("Мы свяжемся с вами по указанному телефону.", { title: "Заказ отправлен!", type: "success" });
     } catch(err) {
-      showNotice(err.message, { title: "Не удалось отправить заказ", icon: "⚠️" });
+      showNotice(err.message, { title: "Не удалось отправить заказ", type: "error" });
     } finally {
       btn.disabled = false;
       btn.textContent = "Отправить заказ";
