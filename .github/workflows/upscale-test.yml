@@ -20,7 +20,7 @@ jobs:
 
       - name: Download Real-ESRGAN ncnn-vulkan
         run: |
-          curl -L -o realesrgan.zip https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+          curl -L -o realesrgan.zip https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-v0.2.0-ubuntu.zip
           unzip -q realesrgan.zip -d realesrgan
           chmod +x realesrgan/realesrgan-ncnn-vulkan
 
