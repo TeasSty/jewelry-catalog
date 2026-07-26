@@ -1,0 +1,33 @@
+name: Enhance product photos (TEST sample)
+
+# Временный воркфлоу — обрабатывает несколько образцов в отдельную папку,
+# чтобы посмотреть результат до запуска на всех 2978 фото. Удалить после проверки.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  enhance-sample:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sharpen sample images into images-test-preview/
+        run: |
+          if ! command -v convert &> /dev/null; then
+            sudo apt-get update -y && sudo apt-get install -y imagemagick
+          fi
+          mkdir -p images-test-preview
+          for f in items1.jpg items2652.jpg items100.jpg items500.jpg; do
+            convert "images/$f" -unsharp 0x1+0.7+0.02 -modulate 100,110,100 -quality 90 "images-test-preview/$f"
+          done
+
+      - name: Commit sample previews
+        run: |
+          git config user.name "photo-enhance-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add images-test-preview/
+          git commit -m "Test preview: sharpened sample images"
+          git push

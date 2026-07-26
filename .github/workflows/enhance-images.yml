@@ -1,0 +1,36 @@
+name: Enhance product photos
+
+# Запускается только вручную (кнопка Run workflow на вкладке Actions) — это
+# не автоматика по расписанию, а разовая (или по требованию) обработка фото.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  enhance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sharpen and boost saturation on all product photos
+        run: |
+          if ! command -v convert &> /dev/null; then
+            sudo apt-get update -y && sudo apt-get install -y imagemagick
+          fi
+          cd images
+          count=0
+          for f in *.jpg; do
+            convert "$f" -unsharp 0x1+0.7+0.02 -modulate 100,110,100 -quality 90 "$f"
+            count=$((count+1))
+          done
+          echo "Обработано фото: $count"
+
+      - name: Commit enhanced photos if changed
+        run: |
+          git config user.name "photo-enhance-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add images/
+          git diff --cached --quiet || git commit -m "Sharpen and boost saturation on product photos"
+          git push
