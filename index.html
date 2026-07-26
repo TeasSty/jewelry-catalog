@@ -306,6 +306,11 @@
   }
   .modal-close:hover{color:var(--text);}
 
+  .notice-box{text-align:center;padding-top:34px;}
+  .notice-icon{font-size:38px;line-height:1;margin-bottom:10px;}
+  .notice-box h3{font-size:17px;margin-bottom:8px;}
+  .notice-box p{font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;}
+
   .lightbox-content{max-width:90vw;max-height:90vh;position:relative;}
   .lightbox-content img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;background:#f4f4f2;}
   .lightbox-content .modal-close{top:-36px;right:-6px;color:#fff;}
@@ -327,6 +332,8 @@
     padding:10px 12px;border-radius:6px;font-size:14px;outline:none;
   }
   .form-group input:focus{border-color:var(--accent-dim);}
+  .form-group input.invalid{border-color:#ef5350;}
+  .field-error{color:#ef5350;font-size:12px;margin-top:6px;}
   .primary-btn{
     width:100%;padding:12px;background:var(--accent);color:#1a1a1a;border:none;
     border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;
@@ -563,6 +570,17 @@
   <div style="margin-top:6px;">воронинкострома.рф</div>
 </footer>
 
+<!-- Уведомление (заменяет системные alert()) -->
+<div class="modal-overlay" id="noticeOverlay">
+  <div class="modal-box notice-box">
+    <button class="modal-close" id="noticeClose" aria-label="Закрыть">&times;</button>
+    <div class="notice-icon" id="noticeIcon">✅</div>
+    <h3 id="noticeTitle"></h3>
+    <p id="noticeText"></p>
+    <button class="primary-btn" id="noticeOkBtn" type="button">Понятно</button>
+  </div>
+</div>
+
 <!-- Увеличенное фото товара -->
 <div class="modal-overlay" id="lightboxOverlay">
   <div class="lightbox-content">
@@ -613,6 +631,7 @@
         <div class="form-group">
           <label>Телефон для связи *</label>
           <input type="tel" id="orderPhone" placeholder="+7 900 000-00-00">
+          <div class="field-error" id="orderPhoneError" style="display:none;">Укажите телефон для связи</div>
         </div>
         <div class="form-group">
           <label>Комментарий к заказу</label>
@@ -1285,6 +1304,18 @@
   document.getElementById("cartClose").addEventListener("click", () => cartOverlay.classList.remove("show"));
   cartOverlay.addEventListener("click", (e) => { if(e.target === cartOverlay) cartOverlay.classList.remove("show"); });
 
+  // ===== УВЕДОМЛЕНИЯ (вместо системных alert()) =====
+  const noticeOverlay = document.getElementById("noticeOverlay");
+  function showNotice(text, opts = {}){
+    document.getElementById("noticeIcon").textContent = opts.icon || "✅";
+    document.getElementById("noticeTitle").textContent = opts.title || "";
+    document.getElementById("noticeText").textContent = text;
+    noticeOverlay.classList.add("show");
+  }
+  document.getElementById("noticeClose").addEventListener("click", () => noticeOverlay.classList.remove("show"));
+  document.getElementById("noticeOkBtn").addEventListener("click", () => noticeOverlay.classList.remove("show"));
+  noticeOverlay.addEventListener("click", (e) => { if(e.target === noticeOverlay) noticeOverlay.classList.remove("show"); });
+
   // ===== УВЕЛИЧЕННОЕ ФОТО =====
   const lightboxOverlay = document.getElementById("lightboxOverlay");
   function openLightbox(src){
@@ -1393,7 +1424,7 @@
       document.getElementById("authPasswordInput").value = "";
       renderCart();
       if(cart.length > 0) cartOverlay.classList.add("show");
-      if(justRegistered) alert(`Регистрация успешна! На ${email} отправлено письмо для подтверждения почты.`);
+      if(justRegistered) showNotice(`На ${email} отправлено письмо для подтверждения почты.`, { title: "Регистрация успешна!", icon: "🎉" });
     } catch(err) {
       errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || err.message;
       errEl.style.display = "block";
@@ -1438,13 +1469,18 @@
   document.getElementById("submitOrderBtn").addEventListener("click", async () => {
     if(!currentUser || cart.length === 0) return;
     const btn = document.getElementById("submitOrderBtn");
-    const phone = document.getElementById("orderPhone").value.trim();
+    const phoneInput = document.getElementById("orderPhone");
+    const phone = phoneInput.value.trim();
     const comment = document.getElementById("orderComment").value.trim();
 
     if(!phone){
-      alert("Укажите телефон для связи");
+      phoneInput.classList.add("invalid");
+      document.getElementById("orderPhoneError").style.display = "block";
+      phoneInput.focus();
       return;
     }
+    phoneInput.classList.remove("invalid");
+    document.getElementById("orderPhoneError").style.display = "none";
 
     const orderData = {
       uid: currentUser.uid,
@@ -1467,10 +1503,10 @@
       renderCart();
       document.getElementById("orderPhone").value = "";
       document.getElementById("orderComment").value = "";
-      alert("Заказ отправлен! Мы свяжемся с вами по указанному телефону.");
       cartOverlay.classList.remove("show");
+      showNotice("Мы свяжемся с вами по указанному телефону.", { title: "Заказ отправлен!", icon: "✅" });
     } catch(err) {
-      alert("Не удалось отправить заказ: " + err.message);
+      showNotice(err.message, { title: "Не удалось отправить заказ", icon: "⚠️" });
     } finally {
       btn.disabled = false;
       btn.textContent = "Отправить заказ";
