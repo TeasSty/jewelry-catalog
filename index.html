@@ -626,7 +626,7 @@
     <div class="toolbar">
       <div class="search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу" autocomplete="off">
+        <input type="text" id="searchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу" autocomplete="off" readonly>
       </div>
       <div class="result-count" id="resultCount">Загрузка...</div>
     </div>
@@ -1341,7 +1341,17 @@
       closeSidebarMobile();
     });
 
-    document.getElementById("searchInput").addEventListener("input", (e) => {
+    // Chrome игнорирует autocomplete="off" для полей, которые считает похожими на логин
+    // (на странице есть поле пароля), и всё равно подставляет сохранённые email/пароли.
+    // readonly до первого фокуса/клика — надёжный обходной путь: автозаполнение не
+    // трогает readonly-поля, а обычному вводу это не мешает.
+    const searchInputEl = document.getElementById("searchInput");
+    const enableSearchInput = () => searchInputEl.removeAttribute("readonly");
+    searchInputEl.addEventListener("focus", enableSearchInput);
+    searchInputEl.addEventListener("mousedown", enableSearchInput);
+    searchInputEl.addEventListener("touchstart", enableSearchInput);
+
+    searchInputEl.addEventListener("input", (e) => {
       searchTerm = e.target.value.trim();
       currentPage = 1;
       renderGrid();

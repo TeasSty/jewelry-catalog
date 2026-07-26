@@ -244,7 +244,7 @@
           Товары
         </h2>
         <div class="form-group" style="margin-bottom: 10px;">
-          <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу" autocomplete="off">
+          <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу" autocomplete="off" readonly>
         </div>
         <div id="adminSearchStatus" style="font-size: 13px; color: var(--text-dim); margin-bottom: 10px;"></div>
         <div class="table-wrapper">
@@ -634,7 +634,15 @@
       : `Показано: ${matches.length}`;
   }
 
-  document.getElementById("adminSearchInput").addEventListener("input", (e) => {
+  // readonly до фокуса/клика — Chrome не подставляет сохранённые email/пароли
+  // в readonly-поля, а обычному вводу это не мешает (см. index.html)
+  const adminSearchInputEl = document.getElementById("adminSearchInput");
+  const enableAdminSearchInput = () => adminSearchInputEl.removeAttribute("readonly");
+  adminSearchInputEl.addEventListener("focus", enableAdminSearchInput);
+  adminSearchInputEl.addEventListener("mousedown", enableAdminSearchInput);
+  adminSearchInputEl.addEventListener("touchstart", enableAdminSearchInput);
+
+  adminSearchInputEl.addEventListener("input", (e) => {
     currentSearchTerm = normalizeForSearch(e.target.value);
     refreshProductsList();
   });
