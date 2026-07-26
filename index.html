@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ИП Воронин — Ювелирный каталог</title>
 <meta name="description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a24b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l3 5-9 13L3 8Z'/%3E%3Cpath d='M3 8h18'/%3E%3Cpath d='m9 3 3 5-3 13'/%3E%3Cpath d='m15 3-3 5 3 13'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -337,6 +338,11 @@
   .form-group input:focus{border-color:var(--accent-dim);}
   .form-group input.invalid{border-color:#ef5350;}
   .field-error{color:#ef5350;font-size:12px;margin-top:6px;}
+  .link-btn{
+    display:block;width:auto;background:none;border:none;padding:0;margin:8px 0 0 auto;
+    color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;
+  }
+  .link-btn:hover{color:var(--accent);}
   .primary-btn{
     width:100%;padding:12px;background:var(--accent);color:#1a1a1a;border:none;
     border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;
@@ -732,6 +738,7 @@
     <div class="form-group">
       <label>Пароль</label>
       <input type="password" id="authPasswordInput" autocomplete="current-password" placeholder="Минимум 6 символов">
+      <button class="link-btn" id="forgotPasswordBtn" type="button" style="display:none;">Забыли пароль?</button>
     </div>
     <button class="primary-btn" id="authSubmitBtn" type="button">Войти</button>
   </div>
@@ -773,7 +780,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
@@ -1522,6 +1529,7 @@
     document.querySelectorAll(".auth-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === mode));
     document.getElementById("authSubmitBtn").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
     document.getElementById("authNameGroup").style.display = mode === "register" ? "block" : "none";
+    document.getElementById("forgotPasswordBtn").style.display = mode === "login" ? "block" : "none";
     document.getElementById("authError").style.display = "none";
     authOverlay.classList.add("show");
   }
@@ -1598,6 +1606,26 @@
       errEl.style.display = "block";
     } finally {
       submitBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("forgotPasswordBtn").addEventListener("click", async () => {
+    const email = document.getElementById("authEmailInput").value.trim();
+    const errEl = document.getElementById("authError");
+    errEl.style.display = "none";
+
+    if(!email){
+      errEl.textContent = "Введите email, на который зарегистрирован аккаунт";
+      errEl.style.display = "block";
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showNotice(`На ${email} отправлена ссылка для восстановления пароля.`, { title: "Письмо отправлено", type: "success" });
+    } catch(err) {
+      errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || err.message;
+      errEl.style.display = "block";
     }
   });
 
