@@ -1,0 +1,30 @@
+name: Sync catalog from Firestore
+
+on:
+  schedule:
+    - cron: "0 * * * *" # каждый час
+  workflow_dispatch: {} # + можно запустить вручную из вкладки Actions на GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch catalog from Firestore
+        run: node scripts/sync-catalog.mjs
+
+      - name: Commit catalog.json if it changed
+        run: |
+          git config user.name "catalog-sync-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add catalog.json
+          git diff --cached --quiet || git commit -m "Auto-sync catalog.json from Firestore"
+          git push
