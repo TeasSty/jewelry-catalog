@@ -644,7 +644,7 @@
     return `
       <tr>
         <td style="white-space:nowrap;">${date}</td>
-        <td>${order.email || "—"}</td>
+        <td>${order.name || order.email || "—"}</td>
         <td>${order.phone || "—"}</td>
         <td style="max-width:240px;">
           ${itemsText || "—"}

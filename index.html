@@ -721,6 +721,10 @@
       <button class="auth-tab" data-tab="register" type="button">Регистрация</button>
     </div>
     <div class="auth-error" id="authError" style="display:none;"></div>
+    <div class="form-group" id="authNameGroup" style="display:none;">
+      <label>Ваше имя</label>
+      <input type="text" id="authNameInput" autocomplete="name" placeholder="Как к вам обращаться">
+    </div>
     <div class="form-group">
       <label>Email</label>
       <input type="email" id="authEmailInput" autocomplete="email" placeholder="you@example.com">
@@ -769,7 +773,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs",
@@ -1466,10 +1470,12 @@
   onAuthStateChanged(auth, (user) => {
     currentUser = user;
     const accountBtn = document.getElementById("accountBtn");
-    accountBtn.title = currentUser ? `Вы вошли как ${currentUser.email}` : "Войти";
+    // Имя показываем, если его указали при регистрации; для старых аккаунтов без имени — email как раньше
+    const displayLabel = currentUser ? (currentUser.displayName || currentUser.email) : "";
+    accountBtn.title = currentUser ? `Вы вошли как ${displayLabel}` : "Войти";
     accountBtn.classList.toggle("logged-in", !!currentUser);
     document.getElementById("accountDot").classList.toggle("show", !!currentUser);
-    document.getElementById("accountMenuEmail").textContent = currentUser ? currentUser.email : "";
+    document.getElementById("accountMenuEmail").textContent = displayLabel;
     if(!currentUser) document.getElementById("accountMenu").classList.remove("show");
     updateCheckoutUI();
   });
@@ -1509,6 +1515,7 @@
     authMode = mode;
     document.querySelectorAll(".auth-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === mode));
     document.getElementById("authSubmitBtn").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
+    document.getElementById("authNameGroup").style.display = mode === "register" ? "block" : "none";
     document.getElementById("authError").style.display = "none";
     authOverlay.classList.add("show");
   }
@@ -1530,12 +1537,18 @@
   document.getElementById("authSubmitBtn").addEventListener("click", async () => {
     const email = document.getElementById("authEmailInput").value.trim();
     const pass = document.getElementById("authPasswordInput").value;
+    const name = document.getElementById("authNameInput").value.trim();
     const errEl = document.getElementById("authError");
     const submitBtn = document.getElementById("authSubmitBtn");
     errEl.style.display = "none";
 
     if(!email || !pass){
       errEl.textContent = "Заполните email и пароль";
+      errEl.style.display = "block";
+      return;
+    }
+    if(authMode === "register" && !name){
+      errEl.textContent = "Укажите, как к вам обращаться";
       errEl.style.display = "block";
       return;
     }
@@ -1547,11 +1560,13 @@
         await signInWithEmailAndPassword(auth, email, pass);
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        await updateProfile(cred.user, { displayName: name });
         await sendEmailVerification(cred.user);
         justRegistered = true;
       }
 
       authOverlay.classList.remove("show");
+      document.getElementById("authNameInput").value = "";
       document.getElementById("authEmailInput").value = "";
       document.getElementById("authPasswordInput").value = "";
       renderCart();
@@ -1578,7 +1593,7 @@
     const itemsText = order.items.map(i => `${i.sku} ×${i.qty}${i.weight ? " (" + i.weight + " гр.)" : ""}`).join("\n");
     const text =
       `🛍 Новый заказ на сайте!\n\n` +
-      `Покупатель: ${order.email}\n` +
+      `Покупатель: ${order.name || order.email}\n` +
       `Телефон: ${order.phone}\n` +
       (order.comment ? `Комментарий: ${order.comment}\n` : "") +
       `\nТовары:\n${itemsText}`;
@@ -1617,6 +1632,7 @@
     const orderData = {
       uid: currentUser.uid,
       email: currentUser.email,
+      name: currentUser.displayName || "",
       phone,
       comment,
       items: cart.map(i => ({ sku: i.sku, weight: i.weight, qty: i.qty })),
