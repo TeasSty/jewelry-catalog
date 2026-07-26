@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <title>Панель управления каталогом</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a24b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l3 5-9 13L3 8Z'/%3E%3Cpath d='M3 8h18'/%3E%3Cpath d='m9 3 3 5-3 13'/%3E%3Cpath d='m15 3-3 5 3 13'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,11 +40,8 @@
       background: var(--surface); padding: 24px; border-radius: var(--radius);
       box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 18px;
     }
-    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-    .card-head h2 { margin: 0; }
     h2 { margin: 0 0 18px; font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 9px; color: #fff; }
     h2 svg { flex: none; color: var(--accent); }
-    .card-note { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 16px; }
 
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .form-group { margin-bottom: 16px; }
@@ -55,7 +53,7 @@
     }
     input:focus, select:focus { outline: none; border-color: var(--accent-dim); }
     input[type="file"] { padding: 9px 10px; }
-    input::placeholder { color: #6e6e73; }
+    input::placeholder { color: var(--text-dim); }
 
     button {
       background: var(--accent); color: #1a1a1a; border: none; padding: 12px 20px; border-radius: 8px;
@@ -246,7 +244,7 @@
           Товары
         </h2>
         <div class="form-group" style="margin-bottom: 10px;">
-          <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу...">
+          <input type="text" id="adminSearchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу">
         </div>
         <div id="adminSearchStatus" style="font-size: 13px; color: var(--text-dim); margin-bottom: 10px;"></div>
         <div class="table-wrapper">
@@ -507,19 +505,19 @@
   function productRowHtml(item) {
     const image = item.image || item.img || "";
     return `
-      <tr id="row-${item.sku}"
-          data-sku="${item.sku || ""}"
-          data-weight="${item.weight ?? ""}"
-          data-category="${item.category || ""}"
-          data-subcategory="${item.subcategory || ""}"
-          data-img="${image}">
-        <td><strong>${item.sku || ""}</strong></td>
-        <td>${CATEGORY_NAMES[item.category] || item.category || ""} <span style="font-size:11px;color:var(--text-dim);">${item.subcategory ? ' / ' + item.subcategory : ''}</span></td>
-        <td>${item.weight ? item.weight + ' гр.' : '—'}</td>
-        <td><span style="font-size: 11px; color: var(--text-dim);">${image || "—"}</span></td>
+      <tr id="row-${escapeHtml(item.sku)}"
+          data-sku="${escapeHtml(item.sku)}"
+          data-weight="${escapeHtml(item.weight ?? "")}"
+          data-category="${escapeHtml(item.category || "")}"
+          data-subcategory="${escapeHtml(item.subcategory || "")}"
+          data-img="${escapeHtml(image)}">
+        <td><strong>${escapeHtml(item.sku)}</strong></td>
+        <td>${escapeHtml(CATEGORY_NAMES[item.category] || item.category || "")} <span style="font-size:11px;color:var(--text-dim);">${item.subcategory ? ' / ' + escapeHtml(item.subcategory) : ''}</span></td>
+        <td>${item.weight ? escapeHtml(item.weight) + ' гр.' : '—'}</td>
+        <td><span style="font-size: 11px; color: var(--text-dim);">${escapeHtml(image) || "—"}</span></td>
         <td>
           <button class="edit-btn" style="width:auto;">Редактировать</button>
-          <button class="delete-btn" style="width:auto;" data-sku="${item.sku}">Удалить</button>
+          <button class="delete-btn" style="width:auto;" data-sku="${escapeHtml(item.sku)}">Удалить</button>
         </td>
       </tr>
     `;
@@ -571,6 +569,16 @@
         }
       });
     });
+  }
+
+  // Экранирование HTML перед вставкой через innerHTML. Поля заказа (имя, телефон,
+  // комментарий, артикулы в items) заполняет покупатель на сайте — без экранирования
+  // это была бы hранимая XSS: скрипт из комментария заказа выполнился бы в браузере
+  // папы прямо здесь, в админке, с его правами на запись в Firestore.
+  function escapeHtml(value){
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
   }
 
   // Приводит артикул к виду для нечёткого поиска: без регистра, без дефисов/пробелов/точек,
@@ -639,17 +647,17 @@
     const date = order.createdAt && typeof order.createdAt.toDate === "function"
       ? order.createdAt.toDate().toLocaleString("ru")
       : "—";
-    const itemsText = (order.items || []).map(i => `${i.sku} ×${i.qty}`).join(", ");
+    const itemsText = (order.items || []).map(i => `${escapeHtml(i.sku)} ×${escapeHtml(i.qty)}`).join(", ");
     const status = order.status || "new";
 
     return `
       <tr>
         <td style="white-space:nowrap;">${date}</td>
-        <td>${order.name || order.email || "—"}</td>
-        <td>${order.phone || "—"}</td>
+        <td>${escapeHtml(order.name || order.email) || "—"}</td>
+        <td>${escapeHtml(order.phone) || "—"}</td>
         <td style="max-width:240px;">
           ${itemsText || "—"}
-          ${order.comment ? `<br><span style="font-size:11px;color:var(--text-dim);">${order.comment}</span>` : ""}
+          ${order.comment ? `<br><span style="font-size:11px;color:var(--text-dim);">${escapeHtml(order.comment)}</span>` : ""}
         </td>
         <td>
           <select class="order-status-select" data-id="${id}" style="padding:6px 8px;font-size:12px;border-radius:7px;">

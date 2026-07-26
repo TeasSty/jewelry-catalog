@@ -5,6 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ИП Воронин — Ювелирный каталог</title>
 <meta name="description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<link rel="canonical" href="https://teassty.github.io/jewelry-catalog/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="ИП Воронин — Ювелирный каталог">
+<meta property="og:description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<meta property="og:url" content="https://teassty.github.io/jewelry-catalog/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ИП Воронин — Ювелирный каталог">
+<meta name="twitter:description" content="Каталог ювелирных изделий ИП Воронин. Кольца, серьги, цепи, броши и другие изделия из золота и серебра.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "JewelryStore",
+  "name": "ИП Воронин",
+  "telephone": "+7-910-922-35-65",
+  "email": "igor09042005@inbox.ru",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "ул. Коммунаров, д. 40",
+    "addressLocality": "Кострома",
+    "addressCountry": "RU"
+  },
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "opens": "08:30",
+      "closes": "17:00"
+    }
+  ]
+}
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a24b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l3 5-9 13L3 8Z'/%3E%3Cpath d='M3 8h18'/%3E%3Cpath d='m9 3 3 5-3 13'/%3E%3Cpath d='m15 3-3 5 3 13'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,6 +73,7 @@
     display:flex;align-items:center;justify-content:space-between;
     padding:0 28px;
     background:rgba(26,26,26,.92);
+    -webkit-backdrop-filter:blur(10px);
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--line);
   }
@@ -593,7 +626,7 @@
     <div class="toolbar">
       <div class="search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="searchInput" placeholder="Поиск по артикулу...">
+        <input type="text" id="searchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу">
       </div>
       <div class="result-count" id="resultCount">Загрузка...</div>
     </div>
@@ -700,7 +733,7 @@
 </footer>
 
 <!-- Уведомление (заменяет системные alert()) -->
-<div class="modal-overlay" id="noticeOverlay">
+<div class="modal-overlay" id="noticeOverlay" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
   <div class="modal-box notice-box">
     <button class="modal-close" id="noticeClose" aria-label="Закрыть">&times;</button>
     <div class="notice-icon" id="noticeIcon"></div>
@@ -711,7 +744,7 @@
 </div>
 
 <!-- Увеличенное фото товара -->
-<div class="modal-overlay" id="lightboxOverlay">
+<div class="modal-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="Увеличенное фото товара">
   <div class="lightbox-content">
     <button class="modal-close" id="lightboxClose" aria-label="Закрыть">&times;</button>
     <img id="lightboxImg" src="" alt="">
@@ -719,7 +752,7 @@
 </div>
 
 <!-- Вход / Регистрация покупателя -->
-<div class="modal-overlay" id="authOverlay">
+<div class="modal-overlay" id="authOverlay" role="dialog" aria-modal="true" aria-label="Вход или регистрация">
   <div class="modal-box">
     <button class="modal-close" id="authClose" aria-label="Закрыть">&times;</button>
     <div class="auth-tabs">
@@ -745,7 +778,7 @@
 </div>
 
 <!-- Корзина и оформление заказа: узкая панель у правого края, а не громоздкое окно по центру -->
-<div class="modal-overlay cart-overlay" id="cartOverlay">
+<div class="modal-overlay cart-overlay" id="cartOverlay" role="dialog" aria-modal="true" aria-label="Корзина">
   <div class="cart-panel">
     <div class="cart-panel-header">
       <h3>Корзина</h3>
@@ -866,6 +899,15 @@
       .replace(/\d+/g, (digits) => digits.replace(/^0+(?=\d)/, ""));
   }
 
+  // Экранирование HTML перед вставкой через innerHTML — на случай, если каталог когда-либо
+  // будет содержать данные не только из-под контроля админки (сейчас это в основном
+  // подстраховка, а не активная дыра, т.к. каталог пишет только /admin/).
+  function escapeHtml(value){
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+  }
+
   function normalizeProduct(data, fallbackId = "") {
     const sku = data.sku || fallbackId;
     return {
@@ -960,7 +1002,7 @@
 
       return `
         <div class="cat${isActive ? ' active' : ''}" data-cat="${cat.id}">
-          <button class="cat-btn">
+          <button class="cat-btn"${hasSubs ? ' aria-expanded="false"' : ''}>
             <span>${cat.name}</span>
             <span style="display:flex;align-items:center;">
               <span class="count">${count}</span>
@@ -989,13 +1031,18 @@
 
       catBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        
+
         if (hasSubs) {
           const isOpen = el.classList.contains("open");
-          list.querySelectorAll(".cat").forEach(c => c.classList.remove("open"));
+          list.querySelectorAll(".cat").forEach(c => {
+            c.classList.remove("open");
+            const b = c.querySelector(".cat-btn");
+            if(b.hasAttribute("aria-expanded")) b.setAttribute("aria-expanded", "false");
+          });
 
           if (!isOpen) {
             el.classList.add("open");
+            catBtn.setAttribute("aria-expanded", "true");
             activeCategory = catId;
             activeSubcategory = "";
             currentPage = 1;
@@ -1152,14 +1199,14 @@
 
     grid.innerHTML = pageItems.map(item => `
       <div class="card">
-        <div class="card-img" data-img="${item.img}">
-          <img src="${item.img}" alt="${item.sku}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:11px;color:#666\\'>нет фото</span>'">
+        <div class="card-img" data-img="${escapeHtml(item.img)}">
+          <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:11px;color:#666\\'>нет фото</span>'">
         </div>
         <div class="card-body">
-          <div class="card-sku">${item.sku}</div>
+          <div class="card-sku">${escapeHtml(item.sku)}</div>
           <div class="card-bottom-row">
-            <div class="card-weight">${item.weight} гр.</div>
-            <div class="card-control" data-sku="${item.sku}">${cartControlHtml(item.sku)}</div>
+            <div class="card-weight">${escapeHtml(item.weight)} гр.</div>
+            <div class="card-control" data-sku="${escapeHtml(item.sku)}">${cartControlHtml(item.sku)}</div>
           </div>
         </div>
       </div>
@@ -1215,7 +1262,7 @@
     }
     const imgEl = e.target.closest(".card-img");
     if(imgEl){
-      openLightbox(imgEl.dataset.img);
+      openLightbox(imgEl.dataset.img, imgEl.querySelector("img")?.alt);
     }
   });
 
@@ -1404,17 +1451,17 @@
 
     list.innerHTML = cart.map(i => `
       <div class="cart-item-row">
-        <img src="${i.img}" alt="${i.sku}">
+        <img src="${escapeHtml(i.img)}" alt="${escapeHtml(i.sku)}">
         <div class="cart-item-info">
-          <div class="cart-item-sku">${i.sku}</div>
-          <div class="cart-item-weight">${i.weight ? i.weight + " гр." : ""}</div>
+          <div class="cart-item-sku">${escapeHtml(i.sku)}</div>
+          <div class="cart-item-weight">${i.weight ? escapeHtml(i.weight) + " гр." : ""}</div>
         </div>
         <div class="qty-control">
-          <button type="button" data-action="dec" data-sku="${i.sku}">−</button>
-          <span>${i.qty}</span>
-          <button type="button" data-action="inc" data-sku="${i.sku}">+</button>
+          <button type="button" data-action="dec" data-sku="${escapeHtml(i.sku)}">−</button>
+          <span>${escapeHtml(i.qty)}</span>
+          <button type="button" data-action="inc" data-sku="${escapeHtml(i.sku)}">+</button>
         </div>
-        <button class="remove-item-btn" type="button" data-sku="${i.sku}" aria-label="Удалить" title="Удалить">&times;</button>
+        <button class="remove-item-btn" type="button" data-sku="${escapeHtml(i.sku)}" aria-label="Удалить" title="Удалить">&times;</button>
       </div>
     `).join("");
 
@@ -1461,9 +1508,11 @@
 
   // ===== УВЕЛИЧЕННОЕ ФОТО =====
   const lightboxOverlay = document.getElementById("lightboxOverlay");
-  function openLightbox(src){
+  function openLightbox(src, alt){
     if(!src) return;
-    document.getElementById("lightboxImg").src = src;
+    const img = document.getElementById("lightboxImg");
+    img.src = src;
+    img.alt = alt || "";
     lightboxOverlay.classList.add("show");
   }
   document.getElementById("lightboxClose").addEventListener("click", () => lightboxOverlay.classList.remove("show"));

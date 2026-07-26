@@ -48,5 +48,7 @@ async function fetchAllProducts() {
 
 const items = await fetchAllProducts();
 const fs = await import("node:fs/promises");
-await fs.writeFile("catalog.json", JSON.stringify({ items }, null, 2) + "\n", "utf8");
+// Без отступов — файл читает только браузер, а не человек; на ~3000 товарах
+// красивое форматирование почти удваивает вес файла, который качает каждый посетитель.
+await fs.writeFile("catalog.json", JSON.stringify({ items }), "utf8");
 console.log(`Синхронизировано товаров: ${items.length}`);

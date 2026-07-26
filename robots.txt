@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://teassty.github.io/jewelry-catalog/sitemap.xml
