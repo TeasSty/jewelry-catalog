@@ -348,8 +348,11 @@
   .notice-box h3{font-size:17px;margin-bottom:8px;}
   .notice-box p{font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;}
 
-  .lightbox-content{max-width:90vw;max-height:90vh;position:relative;}
-  .lightbox-content img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;background:#f4f4f2;}
+  /* Исходники фото — 500×500px. Ограничиваем увеличение примерно этим размером
+     (плюс небольшой запас), иначе на весь экран (90vw/90vh) картинка растягивается
+     в 3-4 раза и становится заметно размытой — крупнее исходного разрешения не сделать. */
+  .lightbox-content{max-width:min(90vw,560px);max-height:min(90vh,560px);position:relative;}
+  .lightbox-content img{max-width:min(90vw,560px);max-height:min(90vh,560px);object-fit:contain;border-radius:8px;background:#f4f4f2;}
   .lightbox-content .modal-close{top:-36px;right:-6px;color:#fff;}
 
   .auth-tabs{display:flex;gap:8px;margin-bottom:18px;}
