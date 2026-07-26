@@ -1765,6 +1765,53 @@
     }
   });
 
+  // ===== ФОКУС-ЛОВУШКА ДЛЯ МОДАЛОК (клавиатурная доступность) =====
+  // Работает через MutationObserver за классом "show" — не нужно трогать
+  // десяток мест, где корзина/авторизация/лайтбокс/уведомление открываются
+  // и закрываются. При открытии: фокус уходит внутрь модалки, Tab/Shift+Tab
+  // не выходят за её пределы. При закрытии: фокус возвращается туда, откуда
+  // модалку открыли (обычно — на кнопку, по которой кликнули).
+  function getFocusable(container){
+    return Array.from(container.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    )).filter(el => el.offsetParent !== null);
+  }
+
+  const modalFocusState = new Map();
+
+  function onModalOpened(overlay){
+    const state = { returnEl: document.activeElement, keydownHandler: null };
+    modalFocusState.set(overlay, state);
+
+    const focusables = getFocusable(overlay);
+    if(focusables.length) focusables[0].focus();
+
+    state.keydownHandler = (e) => {
+      if(e.key !== "Tab") return;
+      const items = getFocusable(overlay);
+      if(items.length === 0) return;
+      const first = items[0], last = items[items.length - 1];
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    };
+    overlay.addEventListener("keydown", state.keydownHandler);
+  }
+
+  function onModalClosed(overlay){
+    const state = modalFocusState.get(overlay);
+    if(!state) return;
+    overlay.removeEventListener("keydown", state.keydownHandler);
+    if(state.returnEl && document.contains(state.returnEl)) state.returnEl.focus();
+    modalFocusState.delete(overlay);
+  }
+
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    new MutationObserver(() => {
+      if(overlay.classList.contains("show")) onModalOpened(overlay);
+      else onModalClosed(overlay);
+    }).observe(overlay, { attributes: true, attributeFilter: ["class"] });
+  });
+
   updateCartBadge();
   loadCatalog();
 </script>
