@@ -1468,6 +1468,12 @@
   let authMode = "login";
 
   onAuthStateChanged(auth, (user) => {
+    // Сессия могла остаться с прошлого раза (Firebase хранит вход между визитами) —
+    // если почта так и не подтверждена, не считаем человека вошедшим.
+    if(user && !user.emailVerified){
+      signOut(auth);
+      return;
+    }
     currentUser = user;
     const accountBtn = document.getElementById("accountBtn");
     // Имя показываем, если его указали при регистрации; для старых аккаунтов без имени — email как раньше
@@ -1555,14 +1561,30 @@
 
     try {
       submitBtn.disabled = true;
-      let justRegistered = false;
-      if(authMode === "login") {
-        await signInWithEmailAndPassword(auth, email, pass);
-      } else {
+
+      if(authMode === "register") {
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
         await updateProfile(cred.user, { displayName: name });
         await sendEmailVerification(cred.user);
-        justRegistered = true;
+        // Не оставляем вошедшим сразу после регистрации — вход разрешаем только
+        // после того, как человек перейдёт по ссылке из письма и подтвердит почту.
+        await signOut(auth);
+
+        authOverlay.classList.remove("show");
+        document.getElementById("authNameInput").value = "";
+        document.getElementById("authEmailInput").value = "";
+        document.getElementById("authPasswordInput").value = "";
+        showNotice(`На ${email} отправлено письмо для подтверждения почты. Перейдите по ссылке из письма, затем войдите.`, { title: "Регистрация успешна!", type: "success" });
+        return;
+      }
+
+      // Вход
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      if(!cred.user.emailVerified){
+        await signOut(auth);
+        errEl.textContent = "Сначала подтвердите почту по ссылке из письма, потом войдите.";
+        errEl.style.display = "block";
+        return;
       }
 
       authOverlay.classList.remove("show");
@@ -1571,7 +1593,6 @@
       document.getElementById("authPasswordInput").value = "";
       renderCart();
       if(cart.length > 0) cartOverlay.classList.add("show");
-      if(justRegistered) showNotice(`На ${email} отправлено письмо для подтверждения почты.`, { title: "Регистрация успешна!", type: "success" });
     } catch(err) {
       errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || err.message;
       errEl.style.display = "block";
