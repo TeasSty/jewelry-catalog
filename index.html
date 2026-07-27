@@ -1437,7 +1437,7 @@
 
   // Выбор размера показываем только для колец — обручальные и православные кольца
   // (у "Православные" в подкатегориях есть ещё и подвески, им размер не нужен).
-  const RING_SIZES = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+  const RING_SIZES = Array.from({ length: 21 }, (_, i) => 14 + i * 0.5); // 14, 14.5, 15, ..., 24
   function isRingItem(item){
     if(item.category === "koltsa" || item.category === "obruch") return true;
     if(item.category === "pravoslavie" && item.subcategory === "кольца") return true;
