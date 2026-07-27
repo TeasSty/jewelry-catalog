@@ -5,6 +5,9 @@ name: AI upscale test (Real-ESRGAN sample)
 on:
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   upscale-sample:
     runs-on: ubuntu-latest
