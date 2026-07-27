@@ -655,7 +655,7 @@
     const date = order.createdAt && typeof order.createdAt.toDate === "function"
       ? order.createdAt.toDate().toLocaleString("ru")
       : "—";
-    const itemsText = (order.items || []).map(i => `${escapeHtml(i.sku)} ×${escapeHtml(i.qty)}${i.size ? " [р." + escapeHtml(i.size) + "]" : ""}`).join(", ");
+    const itemsText = (order.items || []).map(i => `${escapeHtml(i.sku)} ×${escapeHtml(i.qty)}${i.sizes && i.sizes.length ? " [р. " + i.sizes.map(s => escapeHtml(s)).join(", ") + "]" : ""}`).join(", ");
     const status = order.status || "new";
 
     return `
