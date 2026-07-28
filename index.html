@@ -430,6 +430,28 @@
     padding:5px 8px;border-radius:5px;font-size:12.5px;outline:none;
   }
   .cart-item-size select:focus{border-color:var(--accent-dim);}
+  .size-picker{position:relative;}
+  .size-picker-btn{
+    min-width:76px;padding:5px 10px;background:var(--bg-raised-2);border:1px solid var(--line);
+    color:var(--text);border-radius:5px;font-size:12.5px;cursor:pointer;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .size-picker-btn:hover{border-color:var(--accent-dim);}
+  .size-picker-btn::after{content:"▾";font-size:9px;color:var(--text-dim);}
+  .size-picker.open .size-picker-btn{border-color:var(--accent);color:var(--accent);}
+  .size-picker-grid{
+    display:none;position:fixed;z-index:220;
+    grid-template-columns:repeat(4, 1fr);gap:5px;width:184px;
+    background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;
+    padding:8px;box-shadow:0 10px 24px rgba(0,0,0,.45);
+  }
+  .size-picker.open .size-picker-grid{display:grid;}
+  .size-chip{
+    padding:6px 0;text-align:center;background:var(--bg-raised-2);border:1px solid var(--line);
+    color:var(--text);border-radius:5px;font-size:12px;cursor:pointer;
+  }
+  .size-chip:hover{border-color:var(--accent);color:var(--accent);}
+  .size-chip.active{background:var(--accent);color:#1a1a1a;border-color:var(--accent);font-weight:700;}
 
   @media (max-width:480px){
     .cart-panel{max-width:100%;}
@@ -1523,10 +1545,12 @@
           ${(i.sizes || []).map((sz, idx) => `
           <div class="cart-item-size">
             <label>${(i.sizes || []).length > 1 ? `Размер (кольцо ${idx + 1} из ${i.sizes.length})` : "Размер кольца"}</label>
-            <select class="ring-size-select" data-sku="${escapeHtml(i.sku)}" data-idx="${idx}">
-              <option value="">Не указан</option>
-              ${RING_SIZES.map(s => `<option value="${s}"${sz === s ? " selected" : ""}>${s}</option>`).join("")}
-            </select>
+            <div class="size-picker" data-sku="${escapeHtml(i.sku)}" data-idx="${idx}">
+              <button type="button" class="size-picker-btn">${sz ? sz : "Выбрать"}</button>
+              <div class="size-picker-grid">
+                ${RING_SIZES.map(s => `<button type="button" class="size-chip${sz === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
+              </div>
+            </div>
           </div>`).join("")}
         </div>` : ""}
       </div>
@@ -1535,7 +1559,6 @@
     list.querySelectorAll('[data-action="inc"]').forEach(b => b.addEventListener("click", () => changeQty(b.dataset.sku, 1)));
     list.querySelectorAll('[data-action="dec"]').forEach(b => b.addEventListener("click", () => changeQty(b.dataset.sku, -1)));
     list.querySelectorAll(".remove-item-btn").forEach(b => b.addEventListener("click", () => removeFromCart(b.dataset.sku)));
-    list.querySelectorAll(".ring-size-select").forEach(sel => sel.addEventListener("change", () => changeSize(sel.dataset.sku, Number(sel.dataset.idx), sel.value)));
 
     const totalQty = cart.reduce((s, i) => s + i.qty, 0);
     const totalWeight = cart.reduce((s, i) => s + (parseFloat(i.weight) || 0) * i.qty, 0);
@@ -1833,6 +1856,38 @@
     }
   });
 
+  // ===== ВЫБОР РАЗМЕРА КОЛЬЦА: компактная сетка вместо длинного нативного <select> =====
+  // Один делегированный обработчик на всю корзину — работает даже после
+  // renderCart() перерисовывает список (не нужно навешивать заново).
+  document.getElementById("cartItemsList").addEventListener("click", (e) => {
+    const chip = e.target.closest(".size-chip");
+    if(chip){
+      const picker = chip.closest(".size-picker");
+      changeSize(picker.dataset.sku, Number(picker.dataset.idx), chip.dataset.size);
+      renderCart();
+      return;
+    }
+    const trigger = e.target.closest(".size-picker-btn");
+    if(trigger){
+      const picker = trigger.closest(".size-picker");
+      const wasOpen = picker.classList.contains("open");
+      document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
+      if(!wasOpen){
+        picker.classList.add("open");
+        // position:fixed — считаем координаты сами, иначе прокручиваемая корзина обрежет попап
+        const rect = trigger.getBoundingClientRect();
+        const grid = picker.querySelector(".size-picker-grid");
+        const gridWidth = 184;
+        grid.style.top = (rect.bottom + 6) + "px";
+        grid.style.left = Math.max(8, rect.right - gridWidth) + "px";
+      }
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if(!e.target.closest(".size-picker")){
+      document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
+    }
+  });
   document.addEventListener("keydown", (e) => {
     if(e.key === "Escape"){
       document.querySelectorAll(".modal-overlay.show").forEach(o => o.classList.remove("show"));
