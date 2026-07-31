@@ -103,7 +103,10 @@
       weight: data.weight ?? "",
       category: (data.category || "").toLowerCase(),
       subcategory: (data.subcategory || "").toLowerCase(),
-      createdAt: toMillis(data.createdAt)
+      createdAt: toMillis(data.createdAt),
+      // Свой список размеров кольца (задаётся в админке для КА/КЛ) — пусто/не задано
+      // означает обычный полный диапазон 14-24, см. ringSizesFor.
+      sizes: Array.isArray(data.sizes) ? data.sizes.filter(s => typeof s === "number") : []
     };
   }
 
@@ -315,7 +318,15 @@
     });
   }
 
+  // Применяет группировку пар "Гарнитуры" (см. groupGarnituryPairs ниже) поверх обычной
+  // фильтрации — так пара выглядит парой в любом разрезе (вся категория, конкретная
+  // подкатегория, поиск, "Все товары"). Вне "Гарнитуры" группировка не находит совпадений
+  // и возвращает список без изменений.
   function getFiltered(){
+    return groupGarnituryPairs(getFilteredFlat());
+  }
+
+  function getFilteredFlat(){
     // Сравниваем по нормализованному артикулу (skuNorm уже посчитан один раз при загрузке) —
     // так поиск не зависит от регистра, дефисов/пробелов и ведущих нулей.
     const term = normalizeForSearch(searchTerm);
@@ -388,51 +399,92 @@
     // выполнять код из атрибутов) и сам по себе собирал HTML внутри кавычек внутри
     // кавычек — легко ошибиться. Теперь то же самое делает один делегированный
     // слушатель ниже (событие error всплывает в фазе перехвата).
-    grid.innerHTML = pageItems.map(item => `
+    grid.innerHTML = pageItems.map(item => item.isSet ? renderSetCard(item) : renderProductCard(item)).join("");
+
+    renderPagination(totalPages);
+  }
+
+  function renderProductCard(item){
+    // Без loading="lazy": пагинация и так ограничивает страницу разумным числом фото
+    // (20 обычных товаров, до ~40 с учётом пар "Гарнитуры" — совсем немного для
+    // современного соединения), а лень откладывала подгрузку до прокрутки и на
+    // мгновение показывала иконку "битой" картинки, пока не долистаешь до неё.
+    return `
       <div class="card">
         <div class="card-img" data-img="${escapeHtml(item.img)}">
-          <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}" loading="lazy">
+          <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}">
         </div>
         <div class="card-body">
           <div class="card-sku">${escapeHtml(item.sku)}</div>
           <div class="card-bottom-row">
             <div class="card-weight">${escapeHtml(item.weight)} гр.</div>
-            <div class="card-control" data-sku="${escapeHtml(item.sku)}">${cartControlHtml(item.sku)}</div>
+            <div class="card-control" data-sku="${escapeHtml(item.sku)}">${cartControlHtml(item)}</div>
           </div>
         </div>
-      </div>
-    `).join("");
-
-    renderPagination(totalPages);
+      </div>`;
   }
 
-  // Иконка "добавить" или степпер количества внутри карточки — в зависимости от того,
-  // сколько этого товара уже в корзине сейчас
-  function cartControlHtml(sku){
-    const qty = getCartQty(sku);
-    // Артикул экранируем, хотя рядом (в renderGrid) он уже экранирован: эта функция
-    // вызывается ещё и из refreshCardControl, где на входе артикул "как есть" из корзины.
-    const safeSku = escapeHtml(sku);
-    if(qty > 0){
-      return `
-        <div class="card-qty">
-          <button type="button" data-action="dec" data-sku="${safeSku}">−</button>
-          <span>${escapeHtml(qty)}</span>
-          <button type="button" data-action="inc" data-sku="${safeSku}">+</button>
-        </div>`;
-    }
+  // Пара (кольцо+серьги) или тройка (+ подвеска, бывает у "Со вставками") из одной
+  // подкатегории "Гарнитуры" — обычные карточки (каждая работает как всегда: у кольца
+  // свой пикер размера, у остальных его нет) внутри одной общей рамки с подписью
+  // "Комплект". Число колонок подстраивается под число элементов через --set-cols.
+  function renderSetCard(setItem){
+    const pieces = [setItem.ring, setItem.earring, setItem.pendant].filter(Boolean);
     return `
-      <button class="add-cart-btn" data-sku="${safeSku}" type="button" aria-label="В корзину" title="В корзину">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="9.5" y1="10.5" x2="14.5" y2="10.5"/></svg>
-      </button>`;
+      <div class="card-set-pair" style="--set-cols:${pieces.length};">
+        <div class="card-set-label">Комплект</div>
+        <div class="card-set-items">
+          ${pieces.map(renderProductCard).join("")}
+        </div>
+      </div>`;
+  }
+
+  const CART_ICON_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="9.5" y1="10.5" x2="14.5" y2="10.5"/></svg>`;
+
+  // Выбор размера, сделанный на карточке каталога (до добавления в корзину) — по одному
+  // на артикул, не сохраняется между перезагрузками страницы (это просто подсказка на
+  // время просмотра, не часть заказа). Дальше он же подставляется как размер по умолчанию
+  // при увеличении количества — но точный размер каждой единицы всё ещё можно поправить
+  // в корзине (там это работает как раньше, по одному значению на штуку).
+  const cardSelectedSize = new Map();
+
+  // Иконка "добавить", степпер количества, а для колец — ещё и пикер размера. Всё это
+  // одна функция под общим data-sku в .card-control, поэтому refreshCardControl обновляет
+  // сразу и пикер, и степпер одним вызовом.
+  function cartControlHtml(item){
+    const sku = item.sku;
+    const qty = getCartQty(sku);
+    const safeSku = escapeHtml(sku);
+
+    const addOrQtyHtml = qty > 0
+      ? `<div class="card-qty">
+           <button type="button" data-action="dec" data-sku="${safeSku}">−</button>
+           <span>${escapeHtml(qty)}</span>
+           <button type="button" data-action="inc" data-sku="${safeSku}">+</button>
+         </div>`
+      : `<button class="add-cart-btn" data-sku="${safeSku}" type="button" aria-label="В корзину" title="В корзину">${CART_ICON_SVG}</button>`;
+
+    if (!isRingItem(item)) return addOrQtyHtml;
+
+    const chosen = cardSelectedSize.get(sku) || null;
+    const sizePickerHtml = `
+      <div class="size-picker card-size-picker" data-sku="${safeSku}">
+        <button type="button" class="size-picker-btn">${chosen ? escapeHtml(chosen) : "Размер"}</button>
+        <div class="size-picker-grid">
+          ${ringSizesFor(item).map(s => `<button type="button" class="size-chip${chosen === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
+        </div>
+      </div>`;
+    return `<div class="card-ring-controls">${sizePickerHtml}${addOrQtyHtml}</div>`;
   }
 
   function refreshCardControl(sku){
     // Артикул подставляется в CSS-селектор, поэтому кавычка или скобка в нём уронила бы
     // querySelectorAll с исключением (корзина переставала бы обновляться). Сравниваем
     // значения напрямую — селектор строить из данных вообще не нужно.
+    const item = findPageItem(sku);
+    if (!item) return;
     document.querySelectorAll(".card-control").forEach(el => {
-      if(el.dataset.sku === sku) el.innerHTML = cartControlHtml(sku);
+      if(el.dataset.sku === sku) el.innerHTML = cartControlHtml(item);
     });
   }
 
@@ -445,10 +497,78 @@
   // Обработчик один, назначен на #productGrid один раз (см. ниже), а не при каждом рендере.
   let currentPageItems = [];
 
+  // Ищет товар текущей страницы по артикулу — заглядывая и внутрь пар "Гарнитуры"
+  // (там на верхнем уровне лежит псевдо-товар isSet, а настоящие sku — в .ring/.earring).
+  function findPageItem(sku){
+    for (const item of currentPageItems) {
+      if (item.isSet) {
+        if (item.ring.sku === sku) return item.ring;
+        if (item.earring.sku === sku) return item.earring;
+      } else if (item.sku === sku) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  // Общая позиция попапа выбора размера — и для карточки каталога, и для корзины.
+  // position:fixed выбран намеренно (не absolute): и карточка (overflow:hidden ради
+  // скруглённых углов фото), и панель корзины (overflow-y:auto) обрезали бы попап,
+  // окажись он позиционирован от них. Раз это viewport-координаты — при прокрутке
+  // страницы попап перестаёт совпадать с кнопкой, поэтому при скролле его просто
+  // закрываем (см. слушатель scroll ниже), а не пытаемся пересчитывать на лету.
+  function positionSizePickerGrid(picker, trigger){
+    const rect = trigger.getBoundingClientRect();
+    const grid = picker.querySelector(".size-picker-grid");
+    const gridWidth = 184;
+    // На этот момент попап уже .open (display:grid), поэтому offsetHeight — его настоящая
+    // высота, а не 0. Меряем и решаем, разворачивать ли попап вверх от кнопки: если снизу
+    // не хватает места, а сверху хватает — открываем вверх, иначе как обычно вниз.
+    const gridHeight = grid.offsetHeight;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpward = spaceBelow < gridHeight + 10 && spaceAbove > gridHeight + 10;
+    grid.style.top = openUpward ? (rect.top - gridHeight - 6) + "px" : (rect.bottom + 6) + "px";
+    grid.style.left = Math.max(8, rect.right - gridWidth) + "px";
+  }
+
+  // Скролл (страницы или прокручиваемой панели корзины) — закрываем открытый попап
+  // размера, а не оставляем его висеть на старом месте экрана, оторванным от товара.
+  window.addEventListener("scroll", () => {
+    document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
+  }, { capture: true, passive: true });
+
   document.getElementById("productGrid").addEventListener("click", (e) => {
+    // Пикер размера в карточке каталога — выбирается ДО добавления в корзину, а не только
+    // потом в самой корзине (там пикер с теми же классами продолжает работать как раньше).
+    const chip = e.target.closest(".card-ring-controls .size-chip");
+    if(chip){
+      const picker = chip.closest(".size-picker");
+      cardSelectedSize.set(picker.dataset.sku, Number(chip.dataset.size));
+      picker.classList.remove("open");
+      refreshCardControl(picker.dataset.sku);
+      return;
+    }
+    const sizeTrigger = e.target.closest(".card-ring-controls .size-picker-btn");
+    if(sizeTrigger){
+      const picker = sizeTrigger.closest(".size-picker");
+      const wasOpen = picker.classList.contains("open");
+      document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
+      if(!wasOpen){
+        picker.classList.add("open");
+        positionSizePickerGrid(picker, sizeTrigger);
+      }
+      return;
+    }
+
     const addBtn = e.target.closest(".add-cart-btn");
     if(addBtn){
-      const item = currentPageItems.find(i => i.sku === addBtn.dataset.sku);
+      const item = findPageItem(addBtn.dataset.sku);
+      if(!item) return;
+      if(isRingItem(item) && !cardSelectedSize.get(item.sku)){
+        showNotice("Сначала выберите размер кольца в карточке товара.", { title: "Не указан размер", type: "error" });
+        return;
+      }
       addToCart(item);
       return;
     }
@@ -619,12 +739,111 @@
   }
 
   // Выбор размера показываем только для колец — обручальные и православные кольца
-  // (у "Православные" в подкатегориях есть ещё и подвески, им размер не нужен).
+  // (у "Православные" в подкатегориях есть ещё и подвески, им размер не нужен), а внутри
+  // "Гарнитуры" — только у колец по префиксу артикула (ка-/кл-), не у серёг из той же
+  // подкатегории (са-/сл-) и не у прочих артикулов вроде кбн-/сбн- — их эта задача не касается.
   const RING_SIZES = Array.from({ length: 21 }, (_, i) => 14 + i * 0.5); // 14, 14.5, 15, ..., 24
+  const GARNITURY_RING_PREFIXES = ["ка", "кл"];
+  function isGarniturySkuRing(sku){
+    const m = String(sku || "").toLowerCase().match(/^([а-я]+)-/);
+    return !!m && GARNITURY_RING_PREFIXES.includes(m[1]);
+  }
   function isRingItem(item){
     if(item.category === "koltsa" || item.category === "obruch") return true;
     if(item.category === "pravoslavie" && item.subcategory === "кольца") return true;
+    if(item.category === "garnitury" && isGarniturySkuRing(item.sku)) return true;
     return false;
+  }
+  // Кольцо может продаваться не во всём диапазоне 14-24 — тогда админка задаёт свой список
+  // в поле sizes товара. Пусто/не задано — обычный полный диапазон, как было всегда.
+  function ringSizesFor(item){
+    return Array.isArray(item.sizes) && item.sizes.length ? item.sizes : RING_SIZES;
+  }
+
+  // ===== ГАРНИТУРЫ: авто-объединение колец и серёг в пару по совпадающей части артикула =====
+  // "С алмазной гранью": ка-XXX (кольцо) + са-XXX (серьги). "Со вставками": кл-XXX + сл-XXX.
+  // Пара/тройка показывается одной карточкой; если совпадения нет — товар остаётся
+  // обычной отдельной карточкой, как раньше. У "Со вставками" бывает ещё и третий элемент
+  // комплекта — подвеска (пл-XXX): она совпадает по тому же суффиксу с кл-/сл-, но в базе
+  // у неё почему-то не проставлена подкатегория, поэтому её ищем по всей категории
+  // "Гарнитуры", а не только внутри "со вставками" (см. pendantPrefix и pendantBySuffix ниже).
+  const GARNITURY_PAIR_RULES = [
+    { subcategory: "с алмазной гранью", ringPrefix: "ка", earringPrefix: "са" },
+    { subcategory: "с алмазной гранью", ringPrefix: "кбн", earringPrefix: "сбн" },
+    { subcategory: "со вставками", ringPrefix: "кл", earringPrefix: "сл", pendantPrefix: "пл" }
+  ];
+
+  function garniturySkuSuffix(sku, prefix){
+    const m = String(sku || "").toLowerCase().match(new RegExp(`^${prefix}-(.+)$`));
+    return m ? m[1] : null;
+  }
+
+  // Строит sku -> { ring, earring, pendant } по ВСЕМУ каталогу (rawItems), не по текущей
+  // отфильтрованной странице — см. пояснение в groupGarnituryPairs. Каталог загружается
+  // один раз и не меняется на лету, поэтому пересчитывать это на каждый рендер недорого:
+  // сама "Гарнитуры" — это несколько сотен товаров, а не тысячи.
+  function buildGarnituryPartnerMap(){
+    const partnerOf = new Map();
+
+    const pendantBySuffix = new Map();
+    for (const item of rawItems) {
+      if (item.category !== "garnitury") continue;
+      const suffix = garniturySkuSuffix(item.sku, "пл");
+      if (suffix) pendantBySuffix.set(suffix, item);
+    }
+
+    for (const rule of GARNITURY_PAIR_RULES) {
+      const ringsBySuffix = new Map();
+      const earringsBySuffix = new Map();
+      for (const item of rawItems) {
+        if (item.category !== "garnitury" || item.subcategory !== rule.subcategory) continue;
+        const ringSuffix = garniturySkuSuffix(item.sku, rule.ringPrefix);
+        if (ringSuffix) ringsBySuffix.set(ringSuffix, item);
+        const earringSuffix = garniturySkuSuffix(item.sku, rule.earringPrefix);
+        if (earringSuffix) earringsBySuffix.set(earringSuffix, item);
+      }
+      for (const [suffix, ring] of ringsBySuffix) {
+        const earring = earringsBySuffix.get(suffix);
+        if (!earring) continue;
+        const pendant = rule.pendantPrefix ? (pendantBySuffix.get(suffix) || null) : null;
+        const set = { ring, earring, pendant };
+        partnerOf.set(ring.sku, set);
+        partnerOf.set(earring.sku, set);
+        if (pendant) partnerOf.set(pendant.sku, set);
+      }
+    }
+
+    return partnerOf;
+  }
+
+  // На входе — уже отфильтрованный и отсортированный список товаров. На выходе тот же
+  // список, но там, где нашлась пара (или тройка с подвеской) кольцо+серьги, вместо
+  // отдельных элементов идёт один псевдо-товар { isSet:true, ring, earring, pendant }.
+  // Каждый исходный товар встречается в результате не больше одного раза, порядок
+  // остальных элементов не меняется.
+  function groupGarnituryPairs(items){
+    // Карта "какому комплекту принадлежит артикул" строится по ВСЕМУ каталогу (rawItems),
+    // а не по уже отфильтрованному `items`. Это принципиально: стоит отфильтровать список
+    // поиском по одному артикулу (например "кбн-01") или подкатегорией — партнёр с другим
+    // префиксом (сбн-01, либо подвеска без подкатегории) выпал бы из `items` ещё до
+    // группировки, и комплект показался бы неполным. Здесь же комплект собирается один
+    // раз и целиком, а видимость каждого куска по-прежнему решает обычная фильтрация
+    // ниже — просто раз найдя один кусок комплекта в отфильтрованном списке, показываем
+    // его целиком, с остальными кусками из полного каталога.
+    const partnerOf = buildGarnituryPartnerMap();
+    if (partnerOf.size === 0) return items; // обычный случай вне "Гарнитуры" — работа без изменений
+
+    const result = [];
+    const emitted = new Set();
+    for (const item of items) {
+      const set = partnerOf.get(item.sku);
+      if (!set) { result.push(item); continue; }
+      if (emitted.has(set.ring.sku)) continue; // остальные части комплекта уже выведены как часть первой
+      emitted.add(set.ring.sku);
+      const skuParts = [set.ring.sku, set.earring.sku, set.pendant && set.pendant.sku].filter(Boolean);
+      result.push({ isSet: true, sku: skuParts.join(" + "), ring: set.ring, earring: set.earring, pendant: set.pendant });
+    }
+    return result;
   }
 
   // Если взяли, скажем, 3 одинаковых кольца — это может быть 3 разных размера
@@ -634,7 +853,11 @@
   function ensureSizes(item){
     if(!isRingItem(item)) return;
     if(!Array.isArray(item.sizes)) item.sizes = item.size ? [item.size] : [];
-    while(item.sizes.length < item.qty) item.sizes.push(null);
+    // Новые единицы товара по умолчанию получают размер, выбранный на карточке каталога
+    // (если он был выбран) — так после "+" в степпере не нужно сразу лезть в корзину,
+    // чтобы проставить размер. Можно всё равно поправить отдельно в самой корзине.
+    const fallbackSize = cardSelectedSize.get(item.sku) || null;
+    while(item.sizes.length < item.qty) item.sizes.push(fallbackSize);
     while(item.sizes.length > item.qty) item.sizes.pop();
   }
 
@@ -642,7 +865,13 @@
     if(!item) return;
     const existing = cart.find(i => i.sku === item.sku);
     if(existing) existing.qty += 1;
-    else cart.push({ sku: item.sku, img: item.img, weight: item.weight, qty: 1, category: item.category, subcategory: item.subcategory, sizes: [] });
+    else cart.push({
+      sku: item.sku, img: item.img, weight: item.weight, qty: 1,
+      category: item.category, subcategory: item.subcategory, sizes: [],
+      // Список размеров, которые вообще продаются для этого товара (обычный диапазон
+      // 14-24 или свой список из админки) — нужен пикеру в самой корзине ниже.
+      availableSizes: isRingItem(item) ? ringSizesFor(item) : []
+    });
     const it = cart.find(i => i.sku === item.sku);
     ensureSizes(it);
     saveCart();
@@ -709,7 +938,7 @@
             <div class="size-picker" data-sku="${escapeHtml(i.sku)}" data-idx="${idx}">
               <button type="button" class="size-picker-btn">${sz ? sz : "Выбрать"}</button>
               <div class="size-picker-grid">
-                ${RING_SIZES.map(s => `<button type="button" class="size-chip${sz === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
+                ${(i.availableSizes && i.availableSizes.length ? i.availableSizes : RING_SIZES).map(s => `<button type="button" class="size-chip${sz === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
               </div>
             </div>
           </div>`).join("")}
@@ -1044,12 +1273,7 @@
       document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
       if(!wasOpen){
         picker.classList.add("open");
-        // position:fixed — считаем координаты сами, иначе прокручиваемая корзина обрежет попап
-        const rect = trigger.getBoundingClientRect();
-        const grid = picker.querySelector(".size-picker-grid");
-        const gridWidth = 184;
-        grid.style.top = (rect.bottom + 6) + "px";
-        grid.style.left = Math.max(8, rect.right - gridWidth) + "px";
+        positionSizePickerGrid(picker, trigger);
       }
     }
   });

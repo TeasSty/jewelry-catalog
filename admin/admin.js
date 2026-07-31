@@ -138,7 +138,39 @@
         subSelect.innerHTML += `<option value="${escapeHtml(sub)}">${escapeHtml(sub)}</option>`;
       });
     }
+    updateSizesFieldVisibility();
   });
+
+  // ===== Поле "Доступные размеры" — только для колец из "Гарнитуры" (артикул ка-/кл-) =====
+  // У серёг (са-/сл-) и у всех остальных товаров размеров нет вообще, поле для них скрыто.
+  // Пусто в поле = сайт использует обычный диапазон 14-24, как для любого другого кольца.
+  const GARNITURY_RING_PREFIXES = ["ка", "кл"];
+  const GARNITURY_SIZED_SUBCATS = ["с алмазной гранью", "со вставками"];
+
+  function isSizesFieldRelevant() {
+    const category = document.getElementById("category").value;
+    const subcategory = document.getElementById("subcategory").value.toLowerCase();
+    const sku = document.getElementById("sku").value.trim().toLowerCase();
+    if (category !== "garnitury" || !GARNITURY_SIZED_SUBCATS.includes(subcategory)) return false;
+    const m = sku.match(/^([а-я]+)-/);
+    return !!m && GARNITURY_RING_PREFIXES.includes(m[1]);
+  }
+
+  function updateSizesFieldVisibility() {
+    document.getElementById("sizesGroup").style.display = isSizesFieldRelevant() ? "block" : "none";
+  }
+
+  document.getElementById("subcategory").addEventListener("change", updateSizesFieldVisibility);
+  document.getElementById("sku").addEventListener("input", updateSizesFieldVisibility);
+
+  // "16, 17.5, 18" -> [16, 17.5, 18]; мусор и пустые куски отбрасываются молча —
+  // это подсказка для покупателя, а не поле, от которого зависят деньги или доступ.
+  function parseSizesInput(value) {
+    return String(value || "")
+      .split(",")
+      .map(s => parseFloat(s.replace(",", ".").trim()))
+      .filter(n => !isNaN(n) && n > 0);
+  }
 
   // Отслеживание сессии авторизации.
   //
@@ -151,15 +183,26 @@
   //
   // Это проверка «для интерфейса». Даже если её обойти в браузере, ничего не изменится:
   // те же условия продублированы в firestore.rules и в воркере — там их не обойти.
-  async function isCurrentUserAdmin(user) {
+  //
+  // ВАЖНО про ретраи. Правила разрешают читать ровно admins/<свой uid> любому вошедшему —
+  // то есть настоящий "permission-denied" на этом пути практически невозможен. Раньше
+  // здесь ЛЮБАЯ ошибка (обрыв сети, кратковременная недоступность Firestore, и особенно
+  // гонка сразу после входа — ID-токен ещё не успел примениться к следующему запросу)
+  // трактовалась как "документа нет" и разлогинивала настоящего администратора без
+  // всякой его вины. Отличаем: временный сбой — не выходим из аккаунта и пробуем ещё раз;
+  // окончательный ответ "прав нет" — только когда чтение прошло успешно и документа
+  // действительно не существует.
+  async function checkAdminStatus(user, attempt = 1) {
     try {
       const snap = await getDoc(doc(db, "admins", user.uid));
-      return snap.exists();
+      return { isAdmin: snap.exists() };
     } catch (err) {
-      // Правила разрешают читать только собственный документ admins/<uid>, поэтому
-      // отказ здесь означает именно "не администратор", а не сбой.
-      console.error("Проверка прав не удалась:", err);
-      return false;
+      console.error(`Проверка прав не удалась (попытка ${attempt}):`, err);
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        return checkAdminStatus(user, attempt + 1);
+      }
+      return { isAdmin: false, transientError: true };
     }
   }
 
@@ -177,7 +220,15 @@
       return;
     }
 
-    if (!(await isCurrentUserAdmin(user))) {
+    const result = await checkAdminStatus(user);
+    if (!result.isAdmin) {
+      if (result.transientError) {
+        // Не разлогиниваем: сессия остаётся валидной, просто не удалось прямо сейчас
+        // подтвердить права. Обновление страницы (когда сеть отойдёт) повторит проверку
+        // заново, не требуя вводить пароль ещё раз.
+        showAuthScreen("Не удалось проверить права администратора — проблема с сетью или Firestore. Обновите страницу через минуту.");
+        return;
+      }
       await signOut(auth);
       showAuthScreen("У этого аккаунта нет прав администратора.");
       return;
@@ -257,6 +308,14 @@
         updatedAt: serverTimestamp() // Фиксируем дату изменения всегда
       };
 
+      // Поле пишем только когда оно вообще применимо (кольцо ка-/кл- из "Гарнитуры") — для
+      // остальных товаров ключ sizes в документ не попадает. Пустой ввод здесь означает
+      // "вернуться к обычному диапазону 14-24" — пишем именно [], а не пропускаем ключ,
+      // иначе merge:true оставил бы старый список нетронутым и очистить его было бы нельзя.
+      if (isSizesFieldRelevant()) {
+        updateData.sizes = parseSizesInput(document.getElementById("sizes").value);
+      }
+
       if (!docSnap.exists()) {
         // Если товар новый, прокидываем время создания
         updateData.createdAt = serverTimestamp();
@@ -275,8 +334,10 @@
       document.getElementById("sku").value = "";
       document.getElementById("weight").value = "";
       document.getElementById("imageFile").value = "";
+      document.getElementById("sizes").value = "";
       currentImageValue = "";
       setImagePreview("");
+      updateSizesFieldVisibility();
 
     } catch (error) {
       console.error(error);
@@ -292,12 +353,14 @@
   // Общий рендер строки таблицы товаров — используется и "последними 10", и результатами поиска
   function productRowHtml(item) {
     const image = item.image || item.img || "";
+    const sizes = Array.isArray(item.sizes) ? item.sizes.join(", ") : "";
     return `
       <tr id="row-${escapeHtml(item.sku)}"
           data-sku="${escapeHtml(item.sku)}"
           data-weight="${escapeHtml(item.weight ?? "")}"
           data-category="${escapeHtml(item.category || "")}"
           data-subcategory="${escapeHtml(item.subcategory || "")}"
+          data-sizes="${escapeHtml(sizes)}"
           data-img="${escapeHtml(image)}">
         <td><strong>${escapeHtml(item.sku)}</strong></td>
         <td>${escapeHtml(CATEGORY_NAMES[item.category] || item.category || "")} <span style="font-size:11px;color:var(--text-dim);">${item.subcategory ? ' / ' + escapeHtml(item.subcategory) : ''}</span></td>
@@ -321,6 +384,7 @@
         const weight = row.dataset.weight;
         const category = row.dataset.category;
         const subcategory = row.dataset.subcategory;
+        const sizes = row.dataset.sizes;
         const img = row.dataset.img;
 
         document.getElementById("sku").value = sku;
@@ -331,6 +395,8 @@
         document.getElementById("category").dispatchEvent(event);
 
         document.getElementById("subcategory").value = subcategory;
+        document.getElementById("sizes").value = sizes || "";
+        updateSizesFieldVisibility();
 
         // Показываем текущее фото товара; выбирать новое нужно только если хотим его заменить
         currentImageValue = img || "";
@@ -439,11 +505,45 @@
   // Покупатели оформляют заказ на сайте (index.html), он попадает сюда — в коллекцию "orders".
   const ORDER_STATUS_LABELS = { new: "Новый", processing: "В обработке", done: "Выполнен" };
 
+  // Товар заказа хранит только { sku, weight, qty, sizes } — без фото и названия
+  // (см. app.js, submitOrderBtn). Фото и категорию ("название") подтягиваем по артикулу
+  // из уже загруженного каталога (allProductsCache). Если товар с тех пор удалили или
+  // переименовали — карточка всё равно корректно откроется, просто без фото и названия.
+  function findProductBySku(sku) {
+    return (allProductsCache || []).find(p => p.sku === sku);
+  }
+
+  // "18" -> "размер 18"; "18, 19" (два разных размера у нескольких единиц) -> "размеры 18, 19";
+  // нет размера вообще (серьги, обычный товар без sizes) -> пустая строка, ничего не показываем.
+  function orderItemSizeLabel(sizes) {
+    const present = (sizes || []).filter(s => s != null && s !== "");
+    if (present.length === 0) return "";
+    const unique = [...new Set(present)];
+    return (unique.length === 1 ? "размер " : "размеры ") + unique.map(s => escapeHtml(s)).join(", ");
+  }
+
+  function orderItemCardHtml(item) {
+    const product = findProductBySku(item.sku);
+    const image = product ? resolveImagePathForPreview(product.image || product.img || "") : "";
+    const name = product ? (CATEGORY_NAMES[product.category] || "") : "";
+    const sizeLabel = orderItemSizeLabel(item.sizes);
+    const line = `${escapeHtml(item.sku)}${sizeLabel ? " | " + sizeLabel : ""} | ×${escapeHtml(item.qty)}`;
+
+    return `
+      <div class="order-item-card">
+        ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.sku)}">` : ""}
+        <div class="order-item-info">
+          ${name ? `<div class="order-item-name">${escapeHtml(name)}</div>` : ""}
+          <div class="order-item-line">${line}</div>
+        </div>
+      </div>`;
+  }
+
   function orderRowHtml(id, order) {
     const date = order.createdAt && typeof order.createdAt.toDate === "function"
       ? order.createdAt.toDate().toLocaleString("ru")
       : "—";
-    const itemsText = (order.items || []).map(i => `${escapeHtml(i.sku)} ×${escapeHtml(i.qty)}${i.sizes && i.sizes.length ? " [р. " + i.sizes.map(s => escapeHtml(s)).join(", ") + "]" : ""}`).join(", ");
+    const itemsHtml = (order.items || []).map(orderItemCardHtml).join("");
     const status = order.status || "new";
 
     return `
@@ -451,9 +551,9 @@
         <td style="white-space:nowrap;">${date}</td>
         <td>${escapeHtml(order.name || order.email) || "—"}</td>
         <td>${escapeHtml(order.phone) || "—"}</td>
-        <td style="max-width:240px;">
-          ${itemsText || "—"}
-          ${order.comment ? `<br><span style="font-size:11px;color:var(--text-dim);">${escapeHtml(order.comment)}</span>` : ""}
+        <td style="max-width:280px;">
+          <div class="order-items-grid">${itemsHtml || "—"}</div>
+          ${order.comment ? `<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">${escapeHtml(order.comment)}</div>` : ""}
         </td>
         <td>
           <select class="order-status-select" data-id="${escapeHtml(id)}" style="padding:6px 8px;font-size:12px;border-radius:7px;">
@@ -487,6 +587,10 @@
     statusEl.textContent = "Загрузка заказов...";
 
     try {
+      // Нужен для фото/названия в карточках товаров заказа (см. orderItemCardHtml) —
+      // если каталог уже загружен для вкладки "Редактор товаров", второй раз не читается.
+      await loadAllProducts(false);
+
       const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
       const snap = await getDocs(q);
 

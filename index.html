@@ -311,12 +311,22 @@
 
   .grid{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:18px;
+    /* Комплекты "Гарнитуры" занимают 2-3 колонки (grid-column:span), а обычные товары —
+       одну. Без dense браузer расставляет карточки строго по порядку и оставляет пустую
+       клетку там, где широкая карточка не влезла в остаток строки, вместо того чтобы
+       поставить туда следующую подходящую по ширине карточку. */
+    grid-auto-flow:dense;
   }
   .card{
     background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;overflow:hidden;
-    transition:border-color .2s, transform .2s;
+    transition:border-color .2s, box-shadow .2s;
   }
-  .card:hover{border-color:var(--accent-dim);transform:translateY(-2px);}
+  /* box-shadow вместо transform: любой transform на предке превращает его в "контейнер"
+     для потомков с position:fixed (у нас это .size-picker-grid — попап выбора размера
+     прямо в карточке), и попап начинает позиционироваться не от окна браузера, а от
+     самой карточки — вылезает не там, где нужно, стоит навести курсор. box-shadow даёт
+     тот же эффект "приподнятой" карточки при наведении, но не создаёт этой проблемы. */
+  .card:hover{border-color:var(--accent-dim);box-shadow:0 6px 16px rgba(0,0,0,.3);}
   .card-img{
     aspect-ratio:1/1;background:#f4f4f2;
     display:flex;align-items:center;justify-content:center;overflow:hidden;
@@ -479,6 +489,29 @@
   }
   .size-chip:hover{border-color:var(--accent);color:var(--accent);}
   .size-chip.active{background:var(--accent);color:#1a1a1a;border-color:var(--accent);font-weight:700;}
+
+  /* ===== Размер+количество прямо в карточке каталога (кольца из "Гарнитуры" и т.п.) ===== */
+  .card-ring-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .card-ring-controls .size-picker-btn{min-width:64px;padding:5px 8px;}
+
+  /* ===== "Гарнитуры": пара (или тройка с подвеской) в одной рамке =====
+     Число колонок задаёт --set-cols (инлайн-стиль, см. renderSetCard в app.js) — 2 для
+     пары кольцо+серьги, 3 когда есть ещё и подвеска. На мобильном всегда 1 колонка:
+     !important нужен, потому что инлайн-стиль иначе перевесил бы обычное правило
+     из таблицы стилей даже внутри медиа-запроса. */
+  .card-set-pair{
+    grid-column:span var(--set-cols, 2);background:var(--bg-raised-2);border:1px solid var(--accent-dim);
+    border-radius:10px;padding:12px;
+  }
+  .card-set-label{
+    font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;
+    letter-spacing:.05em;margin-bottom:10px;
+  }
+  .card-set-items{display:grid;grid-template-columns:repeat(var(--set-cols, 2), 1fr);gap:12px;}
+  .card-set-items .card{background:var(--bg-raised);}
+  @media (max-width:480px){
+    .card-set-pair{--set-cols:1 !important;}
+  }
 
   @media (max-width:480px){
     .cart-panel{max-width:100%;}

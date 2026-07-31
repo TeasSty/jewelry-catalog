@@ -52,7 +52,7 @@ service cloud.firestore {
       function validProduct() {
         let d = request.resource.data;
         return d.keys().hasOnly(['sku', 'name', 'weight', 'category', 'subcategory',
-                                 'image', 'images', 'createdAt', 'updatedAt'])
+                                 'image', 'images', 'sizes', 'createdAt', 'updatedAt'])
           && isString(d.sku, 120)
           && d.sku == productId
           && isString(d.name, 120)
@@ -63,7 +63,14 @@ service cloud.firestore {
           // Поле images в схеме разрешено, но панель его пока не пишет. Раз ключ
           // допустим — проверяем и его, иначе через него можно было бы положить
           // в документ что угодно любого размера.
-          && (!('images' in d) || (d.images is list && d.images.size() <= 20));
+          && (!('images' in d) || (d.images is list && d.images.size() <= 20))
+          // Свой список размеров кольца (только для КА/КЛ в "Гарнитуры", задаётся в
+          // /admin/) — необязателен; когда его нет, сайт использует обычный диапазон
+          // 14-24. Ограничиваем длину, как и с images выше — тип каждого элемента
+          // здесь не проверить (в правилах Firestore нет поэлементного forEach), но
+          // это поле влияет только на то, какие размеры показаны в пикере, а не на
+          // деньги или доступ, так что риска в этом нет.
+          && (!('sizes' in d) || (d.sizes is list && d.sizes.size() <= 30));
       }
     }
 
