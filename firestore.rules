@@ -1,0 +1,122 @@
+rules_version = '2';
+
+// Правила доступа к базе Firestore проекта voronin-jewelry.
+//
+// ВАЖНО: этот файл — источник правды. Правила, набранные руками в консоли Firebase,
+// при следующем `firebase deploy --only firestore:rules` будут заменены тем, что здесь.
+// Порядок первой установки описан в SECURITY.md — сначала создайте документ
+// admins/<ваш uid>, только потом публикуйте правила, иначе панель /admin/ потеряет
+// доступ на запись к товарам.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Вспомогательные функции =====
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Почта подтверждена по ссылке из письма. index.html и так не пускает
+    // неподтверждённых, но проверять это нужно и на сервере: клиент можно обойти.
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Администратор — тот, для чьего uid существует документ в коллекции admins.
+    // Коллекция закрыта на запись отовсюду, заполняется вручную через консоль Firebase,
+    // поэтому обычный покупатель не может выдать себе права, что бы он ни отправил.
+    // Второй вариант (custom claim admin=true) поддержан на случай, если позже
+    // появится серверный скрипт с Admin SDK.
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isString(value, maxLen) {
+      return value is string && value.size() <= maxLen;
+    }
+
+    // ===== Каталог товаров =====
+    // Читать может кто угодно без входа — так работает и сайт, и почасовая
+    // синхронизация catalog.json (scripts/sync-catalog.mjs ходит без ключа).
+    // Писать — только администратор из панели /admin/.
+    match /products/{productId} {
+      allow read: if true;
+
+      allow create, update: if isAdmin() && validProduct();
+      allow delete: if isAdmin();
+
+      function validProduct() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['sku', 'name', 'weight', 'category', 'subcategory',
+                                 'image', 'images', 'createdAt', 'updatedAt'])
+          && isString(d.sku, 120)
+          && d.sku == productId
+          && isString(d.name, 120)
+          && (d.weight is number || isString(d.weight, 20))
+          && isString(d.category, 40)
+          && (d.subcategory == null || isString(d.subcategory, 60))
+          && isString(d.image, 500)
+          // Поле images в схеме разрешено, но панель его пока не пишет. Раз ключ
+          // допустим — проверяем и его, иначе через него можно было бы положить
+          // в документ что угодно любого размера.
+          && (!('images' in d) || (d.images is list && d.images.size() <= 20));
+      }
+    }
+
+    // ===== Заказы покупателей =====
+    // Заказ создаёт вошедший покупатель с подтверждённой почтой — и только на себя:
+    // uid и email в документе обязаны совпадать с теми, что в его токене, поэтому
+    // подписаться чужим именем или подделать автора заказа нельзя.
+    // Читает свои заказы сам покупатель, все — только администратор.
+    // Менять статус ("Новый" → "В обработке" → "Выполнен") может только администратор:
+    // покупатель не может ни отредактировать отправленный заказ, ни удалить его.
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      allow create: if isVerified() && validNewOrder();
+      // Единственное, что панель меняет в заказе, — статус. Разрешаем ровно это:
+      // переписать состав, телефон или автора уже отправленного заказа нельзя даже
+      // администратору, поэтому история заказов остаётся достоверной, даже если
+      // кто-то доберётся до его вкладки с открытой панелью.
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && request.resource.data.status in ['new', 'processing', 'done'];
+      allow delete: if isAdmin();
+
+      function validNewOrder() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['uid', 'email', 'name', 'phone', 'comment',
+                                 'items', 'status', 'createdAt'])
+          && d.uid == request.auth.uid
+          && d.email == request.auth.token.email
+          && d.status == 'new'
+          && isString(d.name, 100)
+          && isString(d.phone, 32)
+          && isString(d.comment, 500)
+          && d.items is list
+          && d.items.size() > 0
+          && d.items.size() <= 100
+          && d.createdAt == request.time;
+      }
+    }
+
+    // ===== Список администраторов =====
+    // Панель /admin/ читает только собственный документ, чтобы понять, показывать ли
+    // интерфейс. Записывать нельзя ниоткуда — только вручную в консоли Firebase.
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Всё, что не описано выше, закрыто наглухо. Без этой строки новая коллекция,
+    // добавленная в будущем, унаследовала бы настройки по умолчанию.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
