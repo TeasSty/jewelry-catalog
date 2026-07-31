@@ -370,15 +370,24 @@
   .card-qty span{font-size:12.5px;font-weight:700;color:var(--accent);min-width:16px;text-align:center;}
 
   /* ===== MODALS ===== */
+  /* display:flex всегда (а не display:none/flex по классу) — переход через display
+     нельзя анимировать плавно, он мгновенный. Скрытое состояние — opacity+visibility:
+     invisible, но по-прежнему flex по раскладке, поэтому есть что анимировать, а
+     pointer-events:none не даёт невидимому на вид, но существующему на странице слою
+     перехватывать клики по контенту под ним. */
   .modal-overlay{
-    display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;
+    display:flex;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;
     align-items:center;justify-content:center;padding:20px;
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .2s ease, visibility .2s ease;
   }
-  .modal-overlay.show{display:flex;}
+  .modal-overlay.show{opacity:1;visibility:visible;pointer-events:auto;}
   .modal-box{
     background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;
     padding:26px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;position:relative;
+    transform:translateY(10px) scale(.97);transition:transform .2s ease;
   }
+  .modal-overlay.show .modal-box{transform:translateY(0) scale(1);}
   .modal-box h3{font-size:17px;margin-bottom:16px;}
   .modal-close{
     position:absolute;top:12px;right:14px;background:none;border:none;
@@ -410,6 +419,16 @@
   .auth-error{
     background:rgba(239,83,80,.1);border:1px solid #ef5350;color:#ef5350;
     padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:13px;
+  }
+
+  /* ===== Восстановление пароля ===== */
+  .reset-subtitle{font-size:13px;color:var(--text-dim);line-height:1.5;margin:-6px 0 18px;}
+  /* Спиннер внутри кнопки "Отправить" на время запроса — тот же поворот, что и
+     .spinner у загрузки каталога, но маленький и подстраивается под цвет кнопки. */
+  .btn-spinner{
+    display:inline-block;width:15px;height:15px;vertical-align:-3px;margin-right:8px;
+    border:2px solid rgba(26,26,26,.35);border-top-color:#1a1a1a;border-radius:50%;
+    animation:spin .8s linear infinite;
   }
   .form-group{margin-bottom:14px;}
   .form-group label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
@@ -896,6 +915,35 @@
   <div class="lightbox-content">
     <button class="modal-close" id="lightboxClose" aria-label="Закрыть">&times;</button>
     <img id="lightboxImg" src="" alt="">
+  </div>
+</div>
+
+<!-- Восстановление пароля — отдельное окно от входа/регистрации (не переиспользует
+     их поле email): своё поле, свой шаг успеха, открывается и закрывается независимо,
+     см. openResetModal/openAuthModal в app.js — друг друга они всегда закрывают. -->
+<div class="modal-overlay" id="resetOverlay" role="dialog" aria-modal="true" aria-label="Восстановление пароля">
+  <div class="modal-box">
+    <button class="modal-close" id="resetClose" aria-label="Закрыть">&times;</button>
+
+    <div id="resetFormStep">
+      <h3>Восстановление пароля</h3>
+      <p class="reset-subtitle">Укажите email, на который зарегистрирован аккаунт, — пришлём ссылку для сброса пароля.</p>
+      <div class="auth-error" id="resetError" style="display:none;"></div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="resetEmailInput" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <button class="primary-btn" id="resetSubmitBtn" type="button" disabled>Отправить</button>
+    </div>
+
+    <div id="resetSuccessStep" class="notice-box" style="display:none;">
+      <div class="notice-icon success">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5"/></svg>
+      </div>
+      <h3>Письмо отправлено</h3>
+      <p>Мы отправили ссылку для восстановления пароля на ваш email.</p>
+      <button class="primary-btn" id="resetBackToLoginBtn" type="button">Вернуться ко входу</button>
+    </div>
   </div>
 </div>
 

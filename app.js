@@ -1209,6 +1209,9 @@
   });
 
   function openAuthModal(mode){
+    // Одновременно должно быть открыто только одно модальное окно — если открывали
+    // восстановление пароля, закрываем его, иначе оба окна оказались бы видны разом.
+    resetOverlay.classList.remove("show");
     authMode = mode;
     document.querySelectorAll(".auth-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === mode));
     document.getElementById("authSubmitBtn").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
@@ -1293,24 +1296,75 @@
     }
   });
 
-  document.getElementById("forgotPasswordBtn").addEventListener("click", async () => {
-    const email = document.getElementById("authEmailInput").value.trim();
-    const errEl = document.getElementById("authError");
-    errEl.style.display = "none";
+  // ===== ВОССТАНОВЛЕНИЕ ПАРОЛЯ =====
+  // Отдельное окно, а не переиспользование поля email из входа/регистрации. Раньше
+  // "Забыли пароль?" сразу отправляло письмо на то, что уже было в общем поле —
+  // выглядело так, будто адрес зашит заранее и его нельзя изменить, а окно уведомления
+  // при этом оставалось поверх ещё открытого окна входа. Теперь это два чётких шага:
+  // ввод email в своей форме → явный клик "Отправить" → и только после успеха —
+  // экран подтверждения с кнопкой возврата ко входу.
+  const resetOverlay = document.getElementById("resetOverlay");
+  const resetEmailInput = document.getElementById("resetEmailInput");
+  const resetSubmitBtn = document.getElementById("resetSubmitBtn");
+  const resetError = document.getElementById("resetError");
 
-    if(!email){
-      errEl.textContent = "Введите email, на который зарегистрирован аккаунт";
-      errEl.style.display = "block";
-      return;
-    }
+  function isValidEmail(value){
+    // Разметка type="email" уже что-то проверяет сама, но валидность сабмита не должна
+    // зависеть от того, поддерживает ли конкретный браузер встроенную проверку.
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
 
+  function openResetModal(){
+    authOverlay.classList.remove("show"); // одновременно открыто только одно окно
+    document.getElementById("resetFormStep").style.display = "block";
+    document.getElementById("resetSuccessStep").style.display = "none";
+    resetError.style.display = "none";
+    resetEmailInput.value = "";
+    resetSubmitBtn.disabled = true;
+    resetOverlay.classList.add("show");
+  }
+
+  document.getElementById("forgotPasswordBtn").addEventListener("click", openResetModal);
+  document.getElementById("resetClose").addEventListener("click", () => resetOverlay.classList.remove("show"));
+  resetOverlay.addEventListener("click", (e) => { if(e.target === resetOverlay) resetOverlay.classList.remove("show"); });
+
+  // Кнопка активна, только когда в поле — похожий на email текст, а не с первого символа
+  resetEmailInput.addEventListener("input", () => {
+    resetSubmitBtn.disabled = !isValidEmail(resetEmailInput.value.trim());
+  });
+
+  const RESET_ERROR_MESSAGES = {
+    "auth/invalid-email": "Некорректный email — проверьте написание.",
+    "auth/user-not-found": "Мы не нашли аккаунт с таким email.",
+    "auth/too-many-requests": "Слишком много попыток подряд. Подождите немного и попробуйте снова.",
+    "auth/network-request-failed": "Не удалось связаться с сервером — проверьте соединение с интернетом."
+  };
+
+  resetSubmitBtn.addEventListener("click", async () => {
+    const email = resetEmailInput.value.trim();
+    if(!isValidEmail(email)) return; // кнопка и так недоступна без валидного email, это подстраховка
+    resetError.style.display = "none";
+
+    const originalLabel = resetSubmitBtn.textContent;
     try {
+      resetSubmitBtn.disabled = true;
+      resetSubmitBtn.innerHTML = `<span class="btn-spinner"></span>Отправляем…`;
       await sendPasswordResetEmail(auth, email);
-      showNotice(`На ${email} отправлена ссылка для восстановления пароля.`, { title: "Письмо отправлено", type: "success" });
+
+      document.getElementById("resetFormStep").style.display = "none";
+      document.getElementById("resetSuccessStep").style.display = "block";
     } catch(err) {
-      errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || err.message;
-      errEl.style.display = "block";
+      resetError.textContent = RESET_ERROR_MESSAGES[err.code] || err.message;
+      resetError.style.display = "block";
+    } finally {
+      resetSubmitBtn.disabled = !isValidEmail(resetEmailInput.value.trim());
+      resetSubmitBtn.textContent = originalLabel;
     }
+  });
+
+  document.getElementById("resetBackToLoginBtn").addEventListener("click", () => {
+    resetOverlay.classList.remove("show");
+    openAuthModal("login");
   });
 
   // ===== УВЕДОМЛЕНИЕ В TELEGRAM =====
