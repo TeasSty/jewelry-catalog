@@ -226,6 +226,7 @@
 
   function showAuthScreen(message) {
     const authStatus = document.getElementById("authStatus");
+    document.getElementById("authChecking").style.display = "none";
     document.getElementById("authContainer").style.display = "block";
     document.getElementById("adminInterface").style.display = "none";
     authStatus.innerText = message || "";
@@ -234,6 +235,7 @@
 
   function showAdminInterface() {
     document.getElementById("authStatus").style.display = "none";
+    document.getElementById("authChecking").style.display = "none";
     document.getElementById("authContainer").style.display = "none";
     document.getElementById("adminInterface").style.display = "block";
     allProductsCache = null; // на случай повторного входа в этой же вкладке
@@ -507,13 +509,29 @@
   let allProductsCache = null;
   let currentSearchTerm = "";
 
+  // При открытии панели refreshProductsList() (вкладка "Редактор товаров") и loadOrders()
+  // (фото/названия в карточках заказа) запускаются одновременно и раньше обе независимо
+  // читали всю коллекцию products (2979 документов) — то есть весь каталог читался
+  // ДВАЖДЫ параллельно на каждое открытие панели. loadingPromise отдаёт всем, кто
+  // попросил каталог, пока первое чтение ещё не закончилось, один и тот же промис —
+  // второе обращение просто ждёт то же самое чтение, а не начинает своё.
+  let loadingPromise = null;
+
   async function loadAllProducts(force) {
     if (allProductsCache && !force) return allProductsCache;
-    const snapshot = await getDocs(collection(db, "products"));
-    allProductsCache = snapshot.docs.map(d => d.data());
-    allProductsCache.forEach(item => { item.skuNorm = normalizeForSearch(item.sku); });
-    allProductsCache.sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
-    return allProductsCache;
+    if (loadingPromise) return loadingPromise;
+    loadingPromise = (async () => {
+      const snapshot = await getDocs(collection(db, "products"));
+      allProductsCache = snapshot.docs.map(d => d.data());
+      allProductsCache.forEach(item => { item.skuNorm = normalizeForSearch(item.sku); });
+      allProductsCache.sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
+      return allProductsCache;
+    })();
+    try {
+      return await loadingPromise;
+    } finally {
+      loadingPromise = null;
+    }
   }
 
   const LIST_DISPLAY_LIMIT = 20;
@@ -643,10 +661,10 @@
     statusEl.textContent = "Загрузка заказов...";
 
     try {
-      // Нужен для фото/названия в карточках товаров заказа (см. orderItemCardHtml) —
-      // если каталог уже загружен для вкладки "Редактор товаров", второй раз не читается.
-      await loadAllProducts(false);
-
+      // Сам список заказов — лёгкий запрос (не больше 50 документов) и не должен ждать
+      // тяжёлое чтение всего каталога (2979 товаров), которое нужно только для фото
+      // и названий в карточках товаров заказа. Раньше он ждал именно это — заказы
+      // казались "долго грузятся", хотя тормозил не сам запрос заказов.
       const q = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(50));
       const snap = await getDocs(q);
 
@@ -656,9 +674,21 @@
         return;
       }
 
-      tbody.innerHTML = snap.docs.map(d => orderRowHtml(d.id, d.data())).join("");
-      attachOrderHandlers(tbody);
-      statusEl.textContent = `Показано: ${snap.docs.length}`;
+      const docs = snap.docs;
+      const render = () => {
+        tbody.innerHTML = docs.map(d => orderRowHtml(d.id, d.data())).join("");
+        attachOrderHandlers(tbody);
+      };
+
+      render(); // сразу — без фото/названий, если каталог ещё не в кэше (findProductBySku вернёт null)
+      statusEl.textContent = `Показано: ${docs.length}`;
+
+      // Каталог мог быть уже в кэше (открывали "Редактор товаров") — тогда фото покажутся
+      // сразу на первом render(). Если нет — подтягиваем в фоне и перерисовываем карточки
+      // товаров заказа, когда каталог придёт, не заставляя ждать сам список заказов.
+      if (!allProductsCache) {
+        loadAllProducts(false).then(render).catch(() => {});
+      }
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
       statusEl.textContent = "";

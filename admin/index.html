@@ -151,8 +151,17 @@
     Панель управления каталогом
   </div>
 
+  <!-- Пока не отработал onAuthStateChanged — неизвестно, вошли мы уже или нет. Раньше
+       в этот момент по умолчанию была видна форма входа (у неё не было display:none),
+       и на медленной сети/VPN настоящий администратор каждый раз на секунду-другую
+       видел форму входа, прежде чем появлялась панель — выглядело как "то пускает,
+       то нет". Теперь по умолчанию виден нейтральный экран ожидания, а не сама форма. -->
+  <div id="authChecking" class="card" style="max-width:380px; margin:40px auto; text-align:center; color:var(--text-dim);">
+    Проверяем сессию…
+  </div>
+
   <!-- Блок авторизации -->
-  <div id="authContainer" class="card" style="max-width:380px; margin:40px auto;">
+  <div id="authContainer" class="card" style="max-width:380px; margin:40px auto; display:none;">
     <h2>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       Вход в панель администратора
