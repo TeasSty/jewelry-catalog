@@ -4,7 +4,7 @@
   import { firebaseConfig, relayUrl } from "./config.js";
 
   const app = initializeApp(firebaseConfig);
-  // initializeFirestore с длинным опросом вместо обычного getFirestore.
+  // initializeFirestore вместо обычного getFirestore — настраиваем транспорт.
   //
   // По умолчанию Firestore общается по WebChannel — это потоковое соединение поверх HTTP.
   // Через VPN и корпоративные прокси (а из России к Google почти всегда идут именно так)
@@ -12,10 +12,12 @@
   // вход в аккаунт проходит нормально (Firebase Auth — обычные HTTPS-запросы, прокси их
   // пропускает), а любое обращение к базе тихо падает.
   //
-  // experimentalForceLongPolling переводит SDK на обычный HTTP-опрос — такие запросы
-  // проходят везде, где работает обычный HTTPS. Для этого сайта плата нулевая: подписок
-  // на изменения в реальном времени здесь нет, только разовые чтения и записи.
-  const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+  // experimentalAutoDetectLongPolling, а не жёсткий experimentalForceLongPolling: SDK
+  // сам проверяет при подключении, работает ли быстрый потоковый канал, и переходит на
+  // обычный HTTP-опрос только если нет — раньше опрос был включён всегда и для всех,
+  // даже для тех посетителей, кому он не нужен, а он ощутимо медленнее (у каждого
+  // запроса своя отдельная накладная на установление соединения, а не общий канал).
+  const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
   const auth = getAuth(app);
 
   // Изображения лежат локально в папке проекта images/ (относительный путь — работает и на GitHub Pages в подкаталоге)
