@@ -1,7 +1,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import {
-    getFirestore,
+    initializeFirestore,
     collection,
     doc,
     getDoc,
@@ -28,7 +28,10 @@
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = getFirestore(app);
+  // Длинный опрос вместо WebChannel — та же причина, что и в app.js: через VPN/прокси
+  // потоковое соединение Firestore часто не поднимается, и панель падала на проверке
+  // прав ("Не удалось проверить права администратора"), хотя сам вход при этом проходил.
+  const db = initializeFirestore(app, { experimentalForceLongPolling: true });
 
   const CATEGORY_NAMES = {
     koltsa: "Кольца", obruch: "Обручальные", sergi: "Серьги", garnitury: "Гарнитуры",
@@ -214,7 +217,10 @@
         await new Promise(resolve => setTimeout(resolve, 500 * attempt));
         return checkAdminStatus(user, attempt + 1);
       }
-      return { isAdmin: false, transientError: true };
+      // Код ошибки показываем прямо на экране, а не только в консоли: без него
+      // "проблема с сетью" — это диагноз без симптома, и понять, что именно чинить
+      // (прокси, права, квота), можно только открыв инструменты разработчика.
+      return { isAdmin: false, transientError: true, errorCode: err.code || err.message };
     }
   }
 
@@ -238,7 +244,12 @@
         // Не разлогиниваем: сессия остаётся валидной, просто не удалось прямо сейчас
         // подтвердить права. Обновление страницы (когда сеть отойдёт) повторит проверку
         // заново, не требуя вводить пароль ещё раз.
-        showAuthScreen("Не удалось проверить права администратора — проблема с сетью или Firestore. Обновите страницу через минуту.");
+        showAuthScreen(
+          "Не удалось связаться с базой Firestore, поэтому права администратора не проверены. " +
+          "Сам вход прошёл успешно — дело в соединении, а не в логине. Если включён VPN или прокси, " +
+          "попробуйте обновить страницу, а затем сменить или выключить его.\n\n" +
+          "Код ошибки: " + (result.errorCode || "неизвестен")
+        );
         return;
       }
       await signOut(auth);

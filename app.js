@@ -1,10 +1,21 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { initializeFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { firebaseConfig, relayUrl } from "./config.js";
 
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  // initializeFirestore с длинным опросом вместо обычного getFirestore.
+  //
+  // По умолчанию Firestore общается по WebChannel — это потоковое соединение поверх HTTP.
+  // Через VPN и корпоративные прокси (а из России к Google почти всегда идут именно так)
+  // такое соединение часто рвётся или не устанавливается вовсе. Симптом характерный:
+  // вход в аккаунт проходит нормально (Firebase Auth — обычные HTTPS-запросы, прокси их
+  // пропускает), а любое обращение к базе тихо падает.
+  //
+  // experimentalForceLongPolling переводит SDK на обычный HTTP-опрос — такие запросы
+  // проходят везде, где работает обычный HTTPS. Для этого сайта плата нулевая: подписок
+  // на изменения в реальном времени здесь нет, только разовые чтения и записи.
+  const db = initializeFirestore(app, { experimentalForceLongPolling: true });
   const auth = getAuth(app);
 
   // Изображения лежат локально в папке проекта images/ (относительный путь — работает и на GitHub Pages в подкаталоге)
