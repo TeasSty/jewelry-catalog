@@ -72,7 +72,14 @@
     if (/^https:\/\//i.test(path) || path.startsWith("blob:")) return path;
     if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) return "";
     const clean = path.replace(/^\/+/, "");
-    return clean.startsWith("images/") ? clean : "images/" + clean;
+    const rel = clean.startsWith("images/") ? clean : "images/" + clean;
+    // Панель живёт в /admin/, а папка с фото — в корне сайта, рядом с index.html.
+    // Относительный "images/x.jpg" браузер отсчитывает от текущей страницы и ищет
+    // /admin/images/x.jpg — то есть фото просто не находились (404) ни в превью
+    // товара, ни в карточках заказов. "../" поднимает на уровень выше и одинаково
+    // работает и когда сайт лежит в корне домена, и когда он в подкаталоге
+    // (абсолютный "/images/..." во втором случае сломался бы).
+    return "../" + rel;
   }
 
   function setImagePreview(rawValue) {

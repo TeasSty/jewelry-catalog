@@ -371,13 +371,31 @@
     document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
   }
 
+  // 1 товар / 2 товара / 5 товаров — раньше было только "товар" и "товаров",
+  // из-за чего получалось "2 товаров".
+  function pluralizeGoods(n){
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 14) return "товаров";
+    switch (n % 10) {
+      case 1: return "товар";
+      case 2: case 3: case 4: return "товара";
+      default: return "товаров";
+    }
+  }
+
   function renderGrid(){
     const filtered = getFiltered();
     const grid = document.getElementById("productGrid");
     const empty = document.getElementById("emptyState");
     const resultCount = document.getElementById("resultCount");
 
-    resultCount.textContent = filtered.length + (filtered.length === 1 ? " товар" : " товаров");
+    // Считаем именно товары, а не карточки: карточка комплекта — это 2-3 изделия, и
+    // если считать карточками, счётчик разошёлся бы с "Все товары" в сайдбаре (2762
+    // против 2979) и выглядел бы как будто часть каталога пропала. Пагинация при этом
+    // по-прежнему идёт карточками, по PER_PAGE штук на страницу.
+    const productCount = filtered.reduce((sum, item) =>
+      sum + (item.isSet ? [item.ring, item.earring, item.pendant].filter(Boolean).length : 1), 0);
+    resultCount.textContent = `${productCount} ${pluralizeGoods(productCount)}`;
 
     if(filtered.length === 0){
       grid.innerHTML = "";
@@ -425,16 +443,43 @@
   }
 
   // Пара (кольцо+серьги) или тройка (+ подвеска, бывает у "Со вставками") из одной
-  // подкатегории "Гарнитуры" — обычные карточки (каждая работает как всегда: у кольца
-  // свой пикер размера, у остальных его нет) внутри одной общей рамки с подписью
-  // "Комплект". Число колонок подстраивается под число элементов через --set-cols.
+  // подкатегории "Гарнитуры". Число колонок подстраивается под число изделий через --set-cols.
+  //
+  // Основной сценарий — покупка комплекта целиком: одна кнопка кладёт в корзину все его
+  // изделия разом. Отдельные кнопки у каждого изделия никуда не делись, но убраны под
+  // неприметный переключатель "Купить отдельно" (класс separate-mode на рамке), чтобы не
+  // спорить с главной кнопкой: те же изделия и так продаются в своих категориях
+  // (Кольца/Серьги/Подвески), здесь же человек пришёл за комплектом.
+  //
+  // Размер кольца выбирается один раз на уровне комплекта. Он же хранится в общей карте
+  // cardSelectedSize по артикулу кольца, поэтому пикер комплекта и личный пикер кольца
+  // в режиме "купить отдельно" — это два вида на одно и то же значение, а не две настройки.
   function renderSetCard(setItem){
     const pieces = [setItem.ring, setItem.earring, setItem.pendant].filter(Boolean);
+    const ring = setItem.ring;
+    const ringNeedsSize = !!ring && isRingItem(ring);
+    const setKey = escapeHtml(ring.sku); // комплект адресуем артикулом его кольца
+    const totalWeight = pieces.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0);
+
     return `
-      <div class="card-set-pair" style="--set-cols:${pieces.length};">
-        <div class="card-set-label">Комплект</div>
+      <div class="card-set-pair" style="--set-cols:${pieces.length};" data-set-ring="${setKey}">
+        <div class="card-set-head">
+          <span class="card-set-label">Комплект</span>
+          ${totalWeight ? `<span class="card-set-weight">${totalWeight.toFixed(2)} гр. всего</span>` : ""}
+        </div>
         <div class="card-set-items">
           ${pieces.map(renderProductCard).join("")}
+        </div>
+        <div class="card-set-actions">
+          ${ringNeedsSize ? `
+          <div class="set-size-row">
+            <span class="set-size-label">Размер кольца</span>
+            ${sizePickerHtml(ring, "set-size-picker")}
+          </div>` : ""}
+          <button type="button" class="add-set-btn" data-set-ring="${setKey}">
+            ${CART_ICON_SVG}<span>Добавить комплект в корзину</span>
+          </button>
+          <button type="button" class="set-separate-toggle" data-set-ring="${setKey}">Купить отдельно</button>
         </div>
       </div>`;
   }
@@ -465,16 +510,21 @@
       : `<button class="add-cart-btn" data-sku="${safeSku}" type="button" aria-label="В корзину" title="В корзину">${CART_ICON_SVG}</button>`;
 
     if (!isRingItem(item)) return addOrQtyHtml;
+    return `<div class="card-ring-controls">${sizePickerHtml(item, "card-size-picker")}${addOrQtyHtml}</div>`;
+  }
 
-    const chosen = cardSelectedSize.get(sku) || null;
-    const sizePickerHtml = `
-      <div class="size-picker card-size-picker" data-sku="${safeSku}">
+  // Один и тот же пикер используется в двух местах: внутри карточки товара
+  // (card-size-picker) и на уровне комплекта (set-size-picker). Оба адресуются артикулом
+  // кольца и читают/пишут одно значение в cardSelectedSize, поэтому остаются согласованными.
+  function sizePickerHtml(item, extraClass){
+    const chosen = cardSelectedSize.get(item.sku) || null;
+    return `
+      <div class="size-picker ${extraClass}" data-sku="${escapeHtml(item.sku)}">
         <button type="button" class="size-picker-btn">${chosen ? escapeHtml(chosen) : "Размер"}</button>
         <div class="size-picker-grid">
           ${ringSizesFor(item).map(s => `<button type="button" class="size-chip${chosen === s ? " active" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
         </div>
       </div>`;
-    return `<div class="card-ring-controls">${sizePickerHtml}${addOrQtyHtml}</div>`;
   }
 
   function refreshCardControl(sku){
@@ -485,6 +535,11 @@
     if (!item) return;
     document.querySelectorAll(".card-control").forEach(el => {
       if(el.dataset.sku === sku) el.innerHTML = cartControlHtml(item);
+    });
+    // Пикер размера на уровне комплекта лежит вне .card-control, поэтому обновляем его
+    // тем же вызовом — иначе выбранный размер обновлялся бы только в одном из двух мест.
+    document.querySelectorAll(".set-size-picker").forEach(el => {
+      if(el.dataset.sku === sku) el.outerHTML = sizePickerHtml(item, "set-size-picker");
     });
   }
 
@@ -511,6 +566,34 @@
       }
     }
     return null;
+  }
+
+  // Комплект на текущей странице адресуется артикулом своего кольца (data-set-ring).
+  function findPageSet(ringSku){
+    return currentPageItems.find(i => i.isSet && i.ring.sku === ringSku) || null;
+  }
+
+  // Кладёт в корзину все изделия комплекта разом. Артикулы, количество и размер
+  // проставляет обычный addToCart для каждого изделия по отдельности, поэтому в корзине
+  // и в заказе комплект выглядит как несколько обычных позиций — оформление заказа,
+  // правила Firestore и админка продолжают работать без единого изменения.
+  // Размер получает только кольцо: для серёг и подвески isRingItem даёт false, и
+  // ensureSizes внутри addToCart оставляет им пустой список размеров.
+  function addSetToCart(ringSku){
+    const setItem = findPageSet(ringSku);
+    if (!setItem) return;
+    const pieces = [setItem.ring, setItem.earring, setItem.pendant].filter(Boolean);
+    const ring = setItem.ring;
+
+    if (isRingItem(ring) && !cardSelectedSize.get(ring.sku)) {
+      showNotice("Сначала выберите размер кольца — без него мы не сможем принять заказ.",
+        { title: "Не указан размер", type: "error" });
+      return;
+    }
+
+    pieces.forEach(piece => addToCart(piece));
+    showNotice(`Добавлено изделий: ${pieces.length} — ${pieces.map(p => p.sku).join(", ")}.`,
+      { title: "Комплект в корзине", type: "success" });
   }
 
   // Общая позиция попапа выбора размера — и для карточки каталога, и для корзины.
@@ -543,7 +626,10 @@
   document.getElementById("productGrid").addEventListener("click", (e) => {
     // Пикер размера в карточке каталога — выбирается ДО добавления в корзину, а не только
     // потом в самой корзине (там пикер с теми же классами продолжает работать как раньше).
-    const chip = e.target.closest(".card-ring-controls .size-chip");
+    // Селектор без привязки к .card-ring-controls: этот обработчик висит только на
+    // #productGrid, поэтому любой .size-chip внутри него — пикер каталога, будь он
+    // в самой карточке или на уровне комплекта. У корзины свой отдельный обработчик.
+    const chip = e.target.closest(".size-chip");
     if(chip){
       const picker = chip.closest(".size-picker");
       cardSelectedSize.set(picker.dataset.sku, Number(chip.dataset.size));
@@ -551,7 +637,7 @@
       refreshCardControl(picker.dataset.sku);
       return;
     }
-    const sizeTrigger = e.target.closest(".card-ring-controls .size-picker-btn");
+    const sizeTrigger = e.target.closest(".size-picker-btn");
     if(sizeTrigger){
       const picker = sizeTrigger.closest(".size-picker");
       const wasOpen = picker.classList.contains("open");
@@ -560,6 +646,22 @@
         picker.classList.add("open");
         positionSizePickerGrid(picker, sizeTrigger);
       }
+      return;
+    }
+
+    // Главная кнопка комплекта — кладёт в корзину все его изделия разом
+    const addSetBtn = e.target.closest(".add-set-btn");
+    if(addSetBtn){
+      addSetToCart(addSetBtn.dataset.setRing);
+      return;
+    }
+
+    // "Купить отдельно" — раскрывает личные кнопки у каждого изделия комплекта
+    const separateToggle = e.target.closest(".set-separate-toggle");
+    if(separateToggle){
+      const setEl = separateToggle.closest(".card-set-pair");
+      const isOpen = setEl.classList.toggle("separate-mode");
+      separateToggle.textContent = isOpen ? "Скрыть покупку по отдельности" : "Купить отдельно";
       return;
     }
 
