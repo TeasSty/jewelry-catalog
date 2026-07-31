@@ -232,6 +232,32 @@
     authStatus.style.display = message ? "block" : "none";
   }
 
+  function showAdminInterface() {
+    document.getElementById("authStatus").style.display = "none";
+    document.getElementById("authContainer").style.display = "none";
+    document.getElementById("adminInterface").style.display = "block";
+    allProductsCache = null; // на случай повторного входа в этой же вкладке
+    refreshProductsList();
+    loadOrders();
+  }
+
+  // Права один раз подтверждались для этого аккаунта на этом устройстве — запоминаем,
+  // чтобы временный сбой сети (см. checkAdminStatus) не выбрасывал обратно на экран
+  // входа. localStorage, а не sessionStorage: это удобство для человека, который
+  // возвращается к панели каждый день, а не однократная защита — настоящая проверка
+  // прав всё равно происходит заново при каждом onAuthStateChanged, и запись/удаление
+  // в любом случае проверяют правила Firestore на сервере, эта отметка их не обходит.
+  const ADMIN_VERIFIED_KEY = "voronin_admin_verified_uid";
+  function rememberVerifiedAdmin(uid) {
+    try { localStorage.setItem(ADMIN_VERIFIED_KEY, uid); } catch {}
+  }
+  function wasVerifiedAdminBefore(uid) {
+    try { return localStorage.getItem(ADMIN_VERIFIED_KEY) === uid; } catch { return false; }
+  }
+  function forgetVerifiedAdmin() {
+    try { localStorage.removeItem(ADMIN_VERIFIED_KEY); } catch {}
+  }
+
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
       showAuthScreen("");
@@ -241,6 +267,16 @@
     const result = await checkAdminStatus(user);
     if (!result.isAdmin) {
       if (result.transientError) {
+        if (wasVerifiedAdminBefore(user.uid)) {
+          // Тот же аккаунт уже проходил проверку прав раньше на этом устройстве —
+          // сбой сейчас почти наверняка временный (сеть/прокси), а не потеря прав.
+          // Показываем панель как есть, а не форму входа: реальную защиту это не
+          // ослабляет, поскольку запись/удаление проверяют правила на сервере
+          // независимо от того, что показано на экране.
+          console.error("Проверка прав не прошла (временный сбой), но права для этого аккаунта уже подтверждались раньше — показываем панель.", result.errorCode);
+          showAdminInterface();
+          return;
+        }
         // Не разлогиниваем: сессия остаётся валидной, просто не удалось прямо сейчас
         // подтвердить права. Обновление страницы (когда сеть отойдёт) повторит проверку
         // заново, не требуя вводить пароль ещё раз.
@@ -253,16 +289,13 @@
         return;
       }
       await signOut(auth);
+      forgetVerifiedAdmin();
       showAuthScreen("У этого аккаунта нет прав администратора.");
       return;
     }
 
-    document.getElementById("authStatus").style.display = "none";
-    document.getElementById("authContainer").style.display = "none";
-    document.getElementById("adminInterface").style.display = "block";
-    allProductsCache = null; // на случай повторного входа в этой же вкладке
-    refreshProductsList();
-    loadOrders();
+    rememberVerifiedAdmin(user.uid);
+    showAdminInterface();
   });
 
   // Вход / Выход
