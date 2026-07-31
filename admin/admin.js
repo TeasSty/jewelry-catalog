@@ -62,12 +62,15 @@
   // Пустая строка — фото не выбрано/не установлено.
   let currentImageValue = "";
 
-  // То же самое, что resolveImagePath в index.html: для показа превью бере путь "как есть" для
-  // ссылок/blob-объектов, а голое имя файла достраивает как "images/имя.jpg"
+  // То же самое, что resolveImagePath в app.js, плюс blob: — он нужен только здесь, для
+  // превью выбранного файла до его отправки (URL.createObjectURL). Остальные схемы
+  // (data:, голый http:, чужой домен) отбрасываем так же, как на сайте: значение уходит
+  // в атрибут src, и пропускать туда произвольную схему из базы незачем.
   function resolveImagePathForPreview(raw) {
     const path = String(raw || "").trim();
     if (!path) return "";
-    if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) return path;
+    if (/^https:\/\//i.test(path) || path.startsWith("blob:")) return path;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) return "";
     const clean = path.replace(/^\/+/, "");
     return clean.startsWith("images/") ? clean : "images/" + clean;
   }
@@ -144,7 +147,9 @@
   // ===== Поле "Доступные размеры" — только для колец из "Гарнитуры" (артикул ка-/кл-) =====
   // У серёг (са-/сл-) и у всех остальных товаров размеров нет вообще, поле для них скрыто.
   // Пусто в поле = сайт использует обычный диапазон 14-24, как для любого другого кольца.
-  const GARNITURY_RING_PREFIXES = ["ка", "кл"];
+  // Должно совпадать с GARNITURY_RING_PREFIXES в app.js — иначе размер, заданный здесь,
+  // не будет показан на сайте (или наоборот).
+  const GARNITURY_RING_PREFIXES = ["ка", "кл", "кбн"];
   const GARNITURY_SIZED_SUBCATS = ["с алмазной гранью", "со вставками"];
 
   function isSizesFieldRelevant() {

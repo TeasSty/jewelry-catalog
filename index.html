@@ -23,7 +23,7 @@
   script-src 'self' https://www.gstatic.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  img-src 'self' data: https://i.ibb.co;
+  img-src 'self' https://i.ibb.co;
   connect-src 'self' https://*.googleapis.com https://voronin-relay.gwho12345678.workers.dev;
   frame-src https://voronin-jewelry.firebaseapp.com;
   upgrade-insecure-requests">
@@ -64,7 +64,13 @@
   ]
 }
 </script>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a24b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l3 5-9 13L3 8Z'/%3E%3Cpath d='M3 8h18'/%3E%3Cpath d='m9 3 3 5-3 13'/%3E%3Cpath d='m15 3-3 5 3 13'/%3E%3C/svg%3E">
+<!-- Иконка сайта отдельными файлами, а не data:-URI в атрибуте: поисковики (Google,
+     Яндекс) показывают favicon в выдаче только если это реальный файл, который можно
+     скачать по обычной ссылке. Раньше здесь был data:-URI — в браузере вкладка выглядела
+     нормально, а в результатах поиска иконки не было. -->
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -334,8 +340,11 @@
   .card-img img{width:100%;height:100%;object-fit:contain;}
   .card-body{padding:12px 14px 14px;}
   .card-sku{font-size:13px;font-weight:600;letter-spacing:.02em;}
-  .card-bottom-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;}
-  .card-weight{font-size:12px;color:var(--text-dim);}
+  /* wrap + nowrap на весе: в узкой карточке (тройной комплект, мобильный) строка
+     "вес + управление" не помещалась, и вес разрывался на "3.2" / "гр." посреди слова.
+     Теперь при нехватке места управление уезжает на следующую строку целиком. */
+  .card-bottom-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .card-weight{font-size:12px;color:var(--text-dim);white-space:nowrap;}
   .card-img{cursor:zoom-in;}
 
   .add-cart-btn{
@@ -495,22 +504,25 @@
   .card-ring-controls .size-picker-btn{min-width:64px;padding:5px 8px;}
 
   /* ===== "Гарнитуры": пара (или тройка с подвеской) в одной рамке =====
-     Число колонок задаёт --set-cols (инлайн-стиль, см. renderSetCard в app.js) — 2 для
-     пары кольцо+серьги, 3 когда есть ещё и подвеска. На мобильном всегда 1 колонка:
-     !important нужен, потому что инлайн-стиль иначе перевесил бы обычное правило
-     из таблицы стилей даже внутри медиа-запроса. */
+     Рамка комплекта всегда занимает ровно 2 колонки сетки — и для пары, и для тройки.
+     Раньше тройка занимала 3, и при чётном числе колонок ряды переставали складываться
+     ровно: в конце ряда оставались пустые клетки, которые нечем заполнить (в "Гарнитурах"
+     все товары — комплекты, одиночных карточек шириной в 1 колонку там просто нет).
+     Сколько карточек показать ВНУТРИ рамки, по-прежнему задаёт --set-cols из renderSetCard:
+     у тройки они просто чуть уже. На мобильном — одна колонка и внутри, и снаружи. */
   .card-set-pair{
-    grid-column:span var(--set-cols, 2);background:var(--bg-raised-2);border:1px solid var(--accent-dim);
+    grid-column:span 2;background:var(--bg-raised-2);border:1px solid var(--accent-dim);
     border-radius:10px;padding:12px;
   }
   .card-set-label{
     font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;
     letter-spacing:.05em;margin-bottom:10px;
   }
-  .card-set-items{display:grid;grid-template-columns:repeat(var(--set-cols, 2), 1fr);gap:12px;}
+  .card-set-items{display:grid;grid-template-columns:repeat(var(--set-cols, 2), minmax(0, 1fr));gap:12px;}
   .card-set-items .card{background:var(--bg-raised);}
   @media (max-width:480px){
-    .card-set-pair{--set-cols:1 !important;}
+    .card-set-pair{grid-column:span 1;}
+    .card-set-items{grid-template-columns:1fr;}
   }
 
   @media (max-width:480px){

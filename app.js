@@ -471,7 +471,7 @@
       <div class="size-picker card-size-picker" data-sku="${safeSku}">
         <button type="button" class="size-picker-btn">${chosen ? escapeHtml(chosen) : "Размер"}</button>
         <div class="size-picker-grid">
-          ${ringSizesFor(item).map(s => `<button type="button" class="size-chip${chosen === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
+          ${ringSizesFor(item).map(s => `<button type="button" class="size-chip${chosen === s ? " active" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
         </div>
       </div>`;
     return `<div class="card-ring-controls">${sizePickerHtml}${addOrQtyHtml}</div>`;
@@ -497,13 +497,15 @@
   // Обработчик один, назначен на #productGrid один раз (см. ниже), а не при каждом рендере.
   let currentPageItems = [];
 
-  // Ищет товар текущей страницы по артикулу — заглядывая и внутрь пар "Гарнитуры"
-  // (там на верхнем уровне лежит псевдо-товар isSet, а настоящие sku — в .ring/.earring).
+  // Ищет товар текущей страницы по артикулу — заглядывая и внутрь комплектов "Гарнитуры"
+  // (там на верхнем уровне лежит псевдо-товар isSet, а настоящие sku — в .ring/.earring/.pendant).
+  // Перебираем части комплекта списком, а не по одной: пропущенная ветка означала бы,
+  // что по такой карточке нельзя ни добавить товар в корзину, ни обновить её вид.
   function findPageItem(sku){
     for (const item of currentPageItems) {
       if (item.isSet) {
-        if (item.ring.sku === sku) return item.ring;
-        if (item.earring.sku === sku) return item.earring;
+        const piece = [item.ring, item.earring, item.pendant].find(p => p && p.sku === sku);
+        if (piece) return piece;
       } else if (item.sku === sku) {
         return item;
       }
@@ -721,8 +723,42 @@
   // было сразу при просмотре каталога. Вход нужен только на шаге оформления заказа.
   const CART_KEY = "voronin_cart_v1";
 
+  // localStorage — это данные, которые пользователь может отредактировать руками, поэтому
+  // при загрузке приводим корзину к ожидаемой форме, а не доверяем содержимому. Строки
+  // остаются строками (их всё равно экранируют перед вставкой в разметку), а вот размеры
+  // и количество приводим к числам: они попадают и в размётку, и в заказ, и в арифметику
+  // подсчёта веса — мусор здесь ломал бы итоги, а не только вид.
+  function sanitizeCartItem(raw){
+    if (!raw || typeof raw !== "object") return null;
+    const sku = String(raw.sku ?? "").trim();
+    if (!sku) return null;
+    const qty = Math.max(1, Math.min(999, Math.floor(Number(raw.qty)) || 1));
+    const toSize = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 && n <= 100 ? n : null;
+    };
+    return {
+      sku,
+      // Через тот же фильтр схем, что и каталог: в localStorage могло остаться что угодно,
+      // включая javascript:/data: — в атрибут src такое попадать не должно.
+      img: resolveImagePath(raw.img),
+      weight: typeof raw.weight === "number" ? raw.weight : String(raw.weight ?? ""),
+      qty,
+      category: String(raw.category ?? ""),
+      subcategory: String(raw.subcategory ?? ""),
+      sizes: Array.isArray(raw.sizes) ? raw.sizes.slice(0, 999).map(toSize) : [],
+      availableSizes: Array.isArray(raw.availableSizes)
+        ? raw.availableSizes.map(toSize).filter(n => n !== null).slice(0, 60)
+        : []
+    };
+  }
+
   function loadCart(){
-    try { return JSON.parse(localStorage.getItem(CART_KEY)) || []; }
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CART_KEY));
+      if (!Array.isArray(parsed)) return [];
+      return parsed.slice(0, 200).map(sanitizeCartItem).filter(Boolean);
+    }
     catch(e){ return []; }
   }
   function saveCart(){
@@ -743,7 +779,10 @@
   // "Гарнитуры" — только у колец по префиксу артикула (ка-/кл-), не у серёг из той же
   // подкатегории (са-/сл-) и не у прочих артикулов вроде кбн-/сбн- — их эта задача не касается.
   const RING_SIZES = Array.from({ length: 21 }, (_, i) => 14 + i * 0.5); // 14, 14.5, 15, ..., 24
-  const GARNITURY_RING_PREFIXES = ["ка", "кл"];
+  // Префиксы колец внутри "Гарнитуры". кбн добавлен вместе с парой кбн↔сбн: это тоже
+  // кольцо, и такие же кбн-артикулы в обычной категории "Кольца" размер уже получают —
+  // без этого один и тот же товар вёл бы себя по-разному в зависимости от раздела.
+  const GARNITURY_RING_PREFIXES = ["ка", "кл", "кбн"];
   function isGarniturySkuRing(sku){
     const m = String(sku || "").toLowerCase().match(/^([а-я]+)-/);
     return !!m && GARNITURY_RING_PREFIXES.includes(m[1]);
@@ -936,9 +975,9 @@
           <div class="cart-item-size">
             <label>${(i.sizes || []).length > 1 ? `Размер (кольцо ${idx + 1} из ${i.sizes.length})` : "Размер кольца"}</label>
             <div class="size-picker" data-sku="${escapeHtml(i.sku)}" data-idx="${idx}">
-              <button type="button" class="size-picker-btn">${sz ? sz : "Выбрать"}</button>
+              <button type="button" class="size-picker-btn">${sz ? escapeHtml(sz) : "Выбрать"}</button>
               <div class="size-picker-grid">
-                ${(i.availableSizes && i.availableSizes.length ? i.availableSizes : RING_SIZES).map(s => `<button type="button" class="size-chip${sz === s ? " active" : ""}" data-size="${s}">${s}</button>`).join("")}
+                ${(i.availableSizes && i.availableSizes.length ? i.availableSizes : RING_SIZES).map(s => `<button type="button" class="size-chip${sz === s ? " active" : ""}" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
               </div>
             </div>
           </div>`).join("")}

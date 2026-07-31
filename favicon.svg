@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Тёмная подложка + золотой камень: тонкий контур без фона на белом фоне выдачи
+       поисковика почти не виден, поэтому иконка сделана контрастной плашкой. -->
+  <rect width="64" height="64" rx="12" fill="#1a1a1a"/>
+  <g fill="none" stroke="#c9a24b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(12 12) scale(1.6667)">
+    <path d="M6 3h12l3 5-9 13L3 8Z"/>
+    <path d="M3 8h18"/>
+    <path d="m9 3 3 5-3 13"/>
+    <path d="m15 3-3 5 3 13"/>
+  </g>
+</svg>
