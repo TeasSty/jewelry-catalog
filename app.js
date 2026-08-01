@@ -20,6 +20,16 @@
   const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
   const auth = getAuth(app);
 
+  // Ссылка из письма (подтверждение почты, сброс пароля) ведёт на нашу собственную
+  // страницу auth-action.html вместо белой страницы Google по умолчанию — там то же
+  // самое действие завершает тот же Firebase SDK, просто в оформлении сайта.
+  // handleCodeInApp:true обязателен — без него Firebase проигнорирует url и всё равно
+  // откроет свою страницу.
+  const actionCodeSettings = {
+    url: location.origin + "/auth-action.html",
+    handleCodeInApp: true
+  };
+
   // Изображения лежат локально в папке проекта images/ (относительный путь — работает и на GitHub Pages в подкаталоге)
   const IMG_BASE = "images/";
   const PER_PAGE = 20;
@@ -1260,7 +1270,7 @@
       if(authMode === "register") {
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
         await updateProfile(cred.user, { displayName: name });
-        await sendEmailVerification(cred.user);
+        await sendEmailVerification(cred.user, actionCodeSettings);
         // Не оставляем вошедшим сразу после регистрации — вход разрешаем только
         // после того, как человек перейдёт по ссылке из письма и подтвердит почту.
         await signOut(auth);
@@ -1349,7 +1359,7 @@
     try {
       resetSubmitBtn.disabled = true;
       resetSubmitBtn.innerHTML = `<span class="btn-spinner"></span>Отправляем…`;
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email, actionCodeSettings);
 
       document.getElementById("resetFormStep").style.display = "none";
       document.getElementById("resetSuccessStep").style.display = "block";

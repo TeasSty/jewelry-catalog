@@ -1,0 +1,184 @@
+<!--
+  Собственная страница для ссылок из писем Firebase (подтверждение почты, сброс пароля)
+  вместо стандартной белой страницы Google. Firebase присылает сюда ?mode=...&oobCode=...,
+  а дальше именно эта страница — своим кодом, через тот же Firebase SDK — завершает
+  действие (applyActionCode / confirmPasswordReset). Код действия (oobCode) при этом
+  проверяет и гасит сам Firebase на своих серверах — здесь только своё оформление
+  поверх того же защищённого механизма, а не отдельная самодельная проверка.
+
+  Подключается через actionCodeSettings с handleCodeInApp:true в app.js
+  (sendEmailVerification / sendPasswordResetEmail) — без этого Firebase откроет
+  свою страницу по умолчанию, эта останется неиспользуемой.
+-->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+
+<!-- Та же политика, что в index.html: своя страница — свой набор разрешений.
+     connect-src нужен для запросов к Firebase Auth (identitytoolkit/securetoken,
+     оба под *.googleapis.com), img-src не нужен вовсе, воркер тут не используется. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  base-uri 'none';
+  object-src 'none';
+  form-action 'none';
+  script-src 'self' https://www.gstatic.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src https://fonts.gstatic.com;
+  connect-src 'self' https://*.googleapis.com;
+  upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+
+<title>ИП Воронин</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a24b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12l3 5-9 13L3 8Z'/%3E%3Cpath d='M3 8h18'/%3E%3Cpath d='m9 3 3 5-3 13'/%3E%3Cpath d='m15 3-3 5 3 13'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1a1a1a; --bg-raised:#232323; --bg-raised-2:#2a2a2a;
+    --line:#3a3a3a; --text:#e0e0e0; --text-dim:#9a9a9a;
+    --accent:#c9a24b; --accent-dim:#8f7736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  .logo-main{font-size:22px;font-weight:800;letter-spacing:.03em;color:#fff;text-align:center;}
+  .logo-sub{font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--accent);text-align:center;margin-top:2px;margin-bottom:32px;}
+
+  .card{
+    background:var(--bg-raised);border:1px solid var(--line);border-radius:12px;
+    padding:36px 30px;max-width:400px;width:100%;text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.4);
+    animation:card-in .35s ease;
+  }
+  @keyframes card-in{ from{opacity:0;transform:translateY(10px) scale(.97);} to{opacity:1;transform:none;} }
+
+  h1{font-size:19px;margin-bottom:10px;color:#fff;}
+  p{font-size:14px;color:var(--text-dim);margin-bottom:8px;}
+
+  /* Крутящийся индикатор, пока проверяем ссылку */
+  .spinner{
+    width:38px;height:38px;border:3px solid var(--line);border-top:3px solid var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite;margin:6px auto 20px;
+  }
+  @keyframes spin{ to{transform:rotate(360deg);} }
+
+  /* Золотая галочка в кружке — та же идея, что notice-icon на основном сайте,
+     только крупнее и с анимацией "рисования" при появлении */
+  .check-wrap{width:64px;height:64px;margin:0 auto 20px;}
+  .check-circle{stroke:var(--accent);stroke-width:2;fill:none;stroke-dasharray:166;stroke-dashoffset:166;animation:draw-circle .5s ease forwards;}
+  .check-mark{stroke:var(--accent);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:48;stroke-dashoffset:48;animation:draw-check .35s ease .45s forwards;}
+  @keyframes draw-circle{ to{stroke-dashoffset:0;} }
+  @keyframes draw-check{ to{stroke-dashoffset:0;} }
+
+  .error-icon{width:56px;height:56px;margin:0 auto 18px;color:#ef5350;}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    margin-top:18px;padding:12px;background:var(--accent);color:#1a1a1a;border:none;
+    border-radius:7px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;
+    transition:background .15s;
+  }
+  .btn:hover{background:#dab863;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .btn-ghost{background:none;color:var(--text-dim);text-decoration:underline;margin-top:12px;font-size:13px;}
+
+  .countdown{font-size:12px;color:var(--text-dim);margin-top:14px;}
+
+  .form-group{margin-top:18px;text-align:left;}
+  .form-group label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+  .form-group input{
+    width:100%;background:var(--bg-raised-2);border:1px solid var(--line);color:var(--text);
+    padding:10px 12px;border-radius:6px;font-size:14px;outline:none;
+  }
+  .form-group input:focus{border-color:var(--accent-dim);}
+  .field-hint{font-size:11.5px;color:var(--text-dim);margin-top:6px;}
+  .field-error{color:#ef5350;font-size:12px;margin-top:14px;text-align:left;
+    background:rgba(239,83,80,.1);border:1px solid #ef5350;padding:10px 12px;border-radius:6px;}
+
+  .btn-spinner{
+    display:inline-block;width:15px;height:15px;border:2px solid rgba(26,26,26,.35);
+    border-top-color:#1a1a1a;border-radius:50%;animation:spin .8s linear infinite;
+  }
+
+  [data-step]{display:none;}
+  [data-step].active{display:block;animation:card-in .3s ease;}
+</style>
+</head>
+<body>
+
+<div class="logo-main">ИП ВОРОНИН</div>
+<div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
+
+<div class="card">
+
+  <!-- Пока проверяем oobCode у Firebase — какое именно действие и валиден ли код -->
+  <div data-step="loading" class="active">
+    <div class="spinner"></div>
+    <p>Проверяем ссылку…</p>
+  </div>
+
+  <!-- mode=verifyEmail, applyActionCode прошёл успешно -->
+  <div data-step="verify-success">
+    <svg class="check-wrap" viewBox="0 0 52 52">
+      <circle class="check-circle" cx="26" cy="26" r="24"/>
+      <path class="check-mark" d="M14 27l7 7 17-17"/>
+    </svg>
+    <h1>Почта успешно подтверждена</h1>
+    <p>Спасибо за регистрацию! Ваш аккаунт активирован.</p>
+    <a class="btn" href="/">Перейти в каталог</a>
+    <div class="countdown" id="verifyCountdown"></div>
+  </div>
+
+  <!-- mode=resetPassword, код проверен (verifyPasswordResetCode) — форма нового пароля -->
+  <div data-step="reset-form">
+    <h1>Новый пароль</h1>
+    <p id="resetForEmail"></p>
+    <div class="form-group">
+      <label>Новый пароль</label>
+      <input type="password" id="newPassword" autocomplete="new-password" placeholder="Минимум 6 символов">
+    </div>
+    <div class="form-group">
+      <label>Повторите пароль</label>
+      <input type="password" id="newPasswordRepeat" autocomplete="new-password" placeholder="Ещё раз тот же пароль">
+    </div>
+    <div class="field-error" id="resetFormError" style="display:none;"></div>
+    <button class="btn" id="resetConfirmBtn" type="button">Сохранить новый пароль</button>
+  </div>
+
+  <!-- mode=resetPassword, confirmPasswordReset прошёл успешно -->
+  <div data-step="reset-success">
+    <svg class="check-wrap" viewBox="0 0 52 52">
+      <circle class="check-circle" cx="26" cy="26" r="24"/>
+      <path class="check-mark" d="M14 27l7 7 17-17"/>
+    </svg>
+    <h1>Пароль изменён</h1>
+    <p>Теперь можно войти на сайт с новым паролем.</p>
+    <a class="btn" href="/">Перейти на сайт</a>
+  </div>
+
+  <!-- Код уже использован, просрочен, или ссылка открыта не оттуда — тоже нормальный
+       исход, а не сбой: у oobCode всегда есть срок жизни и он одноразовый. -->
+  <div data-step="error">
+    <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="7.5" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+    <h1>Ссылка недействительна</h1>
+    <p id="errorText">Возможно, она уже использована или срок её действия истёк.</p>
+    <a class="btn-ghost" href="/" style="display:block;">Вернуться на сайт</a>
+  </div>
+
+</div>
+
+<!-- Внешний файл, не инлайн: CSP этой страницы (script-src 'self' ...) без 'unsafe-inline'
+     запретил бы браузеру выполнить код прямо внутри <script>, и страница осталась бы
+     на шаге "Проверяем ссылку…" навсегда, без единой ошибки в консоли (это как раз
+     проверялось при тестировании — ровно так и произошло с первой версией файла). -->
+<script type="module" src="auth-action.js"></script>
+</body>
+</html>
