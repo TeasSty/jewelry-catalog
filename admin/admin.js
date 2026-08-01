@@ -408,8 +408,28 @@
       statusMsg.className = "status success";
       statusMsg.innerText = `Товар ${sku} успешно сохранен/обновлен!`;
       statusMsg.style.display = "block";
-      allProductsCache = null; // кэш устарел после записи
-      refreshProductsList();
+
+      // Обновляем allProductsCache локально, теми же значениями, что только что
+      // записали, — не перечитывая весь каталог (~2979 документов) из Firestore.
+      // updateData сюда не годится напрямую: в нём служебные значения-плейсхолдеры
+      // (serverTimestamp(), deleteField()), которые ничего не значат до записи —
+      // берём то же самое, но настоящими значениями для отображения.
+      const localItem = {
+        sku: updateData.sku,
+        name: updateData.name,
+        weight: updateData.weight,
+        category: updateData.category,
+        subcategory: updateData.subcategory,
+        image: updateData.image,
+        skuNorm: normalizeForSearch(sku)
+      };
+      if (isSizesFieldRelevant()) localItem.sizes = updateData.sizes;
+
+      if (allProductsCache) {
+        allProductsCache = [...allProductsCache.filter(it => it.sku !== sku), localItem]
+          .sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
+      }
+      renderProductsTable();
 
       // Очищаем форму для следующей записи
       document.getElementById("sku").value = "";
@@ -560,12 +580,24 @@
         });
         pendingDeletes.delete(sku);
         if (onCommitted) onCommitted(sku);
-        // Корзина могла быть уже открыта раньше и закэширована (trashCache) — без
-        // сброса она осталась бы со старым (пустым) содержимым до перезагрузки
-        // страницы. Сбрасываем и сразу перерисовываем, даже если вкладка сейчас не
-        // видна: когда на неё переключатся, товар уже будет на месте без лишнего клика.
-        trashCache = null;
-        refreshTrashList();
+
+        // Добавляем товар в Корзину локально, данными из самой строки таблицы —
+        // не перечитывая Firestore. Запрос where("deleted","==",true) сразу после
+        // своей же записи не гарантированно увидит её (Firestore обновляет индекс
+        // не мгновенно) — это и была причина прерывистости "то сразу, то через раз,
+        // то только после обновления страницы". Мы точно знаем, что записали,
+        // поэтому просто дополняем массив; настоящий документ подтянется как есть
+        // при следующей реальной загрузке вкладки.
+        const trashItem = {
+          sku,
+          image: row.dataset.img || "",
+          category: row.dataset.category || "",
+          subcategory: row.dataset.subcategory || null,
+          weight: row.dataset.weight || "",
+          deletedAt: { toDate: () => new Date() } // как настоящий Timestamp — для toDateSafe()
+        };
+        trashCache = [trashItem, ...(trashCache || []).filter(it => it.sku !== sku)];
+        renderTrashTable();
       } catch (err) {
         // Запись не прошла (например, сеть отвалилась) — возвращаем строку в обычный
         // вид, а не оставляем её молча "полуудалённой" только в интерфейсе.
@@ -640,13 +672,18 @@
 
   const LIST_DISPLAY_LIMIT = 20;
 
-  async function refreshProductsList() {
+  // Чистая отрисовка из уже загруженного allProductsCache — без единого обращения
+  // к Firestore. Отдельно от refreshProductsList() намеренно: локальные правки
+  // кэша (удаление/восстановление товара) должны отражаться на экране мгновенно
+  // и детерминированно, а не через повторный запрос к базе сразу после своей же
+  // записи — именно повторный запрос был источником прерывистости "то сразу,
+  // то только после обновления страницы" (Firestore обновляет индекс для where()
+  // не мгновенно, поэтому такой повторный запрос иногда не видел свежую запись).
+  function renderProductsTable() {
     const tbody = document.getElementById("productsTable");
     const statusEl = document.getElementById("adminSearchStatus");
     const term = currentSearchTerm;
-
-    statusEl.innerText = allProductsCache ? "" : "Загрузка каталога...";
-    const all = await loadAllProducts(false);
+    const all = allProductsCache || [];
 
     const matches = term ? all.filter(item => item.skuNorm.includes(term)) : all;
     const shown = matches.slice(0, LIST_DISPLAY_LIMIT);
@@ -657,13 +694,23 @@
       tbody.innerHTML = shown.map(productRowHtml).join("");
       attachRowHandlers(tbody, (deletedSku) => {
         allProductsCache = allProductsCache.filter(it => it.sku !== deletedSku);
-        refreshProductsList();
+        renderProductsTable();
       });
     }
 
     statusEl.innerText = matches.length > LIST_DISPLAY_LIMIT
       ? `Показано ${LIST_DISPLAY_LIMIT} из ${matches.length}${term ? " — уточните запрос" : ""}`
       : `Показано: ${matches.length}`;
+  }
+
+  // Загрузка (если ещё не в кэше) + отрисовка. Используется при первом открытии
+  // панели и при поиске; для локальных правок кэша зовите renderProductsTable()
+  // напрямую — см. комментарий выше.
+  async function refreshProductsList() {
+    const statusEl = document.getElementById("adminSearchStatus");
+    statusEl.innerText = allProductsCache ? "" : "Загрузка каталога...";
+    await loadAllProducts(false);
+    renderProductsTable();
   }
 
   // readonly до фокуса/клика — Chrome не подставляет сохранённые email/пароли
@@ -871,14 +918,24 @@
             deletedAt: deleteField(),
             updatedAt: serverTimestamp()
           });
+
+          // Достаём данные товара из уже загруженного trashCache ДО того, как уберём
+          // его оттуда, и переносим их прямо в allProductsCache — без похода в
+          // Firestore за подтверждением. Перечитывать базу сразу после своей же
+          // записи ненадёжно: where()-запрос может ещё не увидеть свежую запись
+          // (задержка индекса), а полное чтение всех ~2979 товаров ещё и медленное —
+          // это вместе и давало "то появляется сразу, то только после обновления".
+          const restored = (trashCache || []).find(it => it.sku === sku);
           trashCache = (trashCache || []).filter(it => it.sku !== sku);
-          allProductsCache = null; // список товаров устарел — восстановленный товар должен снова быть в нём
-          refreshTrashList();
-          // Сброса кэша одного мало: сама таблица "Редактор товаров" была отрисована
-          // ДО восстановления и просто продолжила бы показывать старые данные, пока
-          // её не перерисуют заново — та же ошибка, что чинили для Корзины при
-          // удалении, здесь в обратную сторону.
-          refreshProductsList();
+          renderTrashTable();
+
+          if (restored && allProductsCache) {
+            const { deleted, deletedAt, ...item } = restored;
+            item.skuNorm = normalizeForSearch(item.sku);
+            allProductsCache = [...allProductsCache.filter(it => it.sku !== sku), item]
+              .sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
+          }
+          renderProductsTable();
         } catch (err) {
           alert("Не удалось восстановить товар: " + err.message);
           row.querySelectorAll("button").forEach(b => b.disabled = false);
@@ -895,7 +952,7 @@
         try {
           await deleteDoc(doc(db, "products", sku));
           trashCache = (trashCache || []).filter(it => it.sku !== sku);
-          refreshTrashList();
+          renderTrashTable();
         } catch (err) {
           alert("Не удалось удалить товар: " + err.message);
           row.querySelectorAll("button").forEach(b => b.disabled = false);
@@ -904,22 +961,34 @@
     });
   }
 
-  async function refreshTrashList() {
+  // Чистая отрисовка из уже загруженного trashCache — без обращения к Firestore.
+  // См. комментарий у renderProductsTable(): та же причина эта функция отдельная
+  // от refreshTrashList() — локальные правки кэша (сам факт удаления/восстановления
+  // товара) должны отражаться сразу, а не через повторный запрос, который сразу
+  // после своей же записи может ещё не увидеть её из-за задержки индекса Firestore.
+  function renderTrashTable() {
     const tbody = document.getElementById("trashTable");
     const statusEl = document.getElementById("trashStatus");
-    statusEl.innerText = trashCache ? "" : "Загрузка корзины...";
+    const items = trashCache || [];
 
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);">Корзина пуста</td></tr>`;
+    } else {
+      tbody.innerHTML = items.map(trashRowHtml).join("");
+      attachTrashHandlers(tbody);
+    }
+    statusEl.innerText = `Показано: ${items.length}`;
+  }
+
+  async function refreshTrashList() {
+    const statusEl = document.getElementById("trashStatus");
+    statusEl.innerText = trashCache ? "" : "Загрузка корзины...";
     try {
-      const items = await loadTrashProducts(false);
-      if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);">Корзина пуста</td></tr>`;
-      } else {
-        tbody.innerHTML = items.map(trashRowHtml).join("");
-        attachTrashHandlers(tbody);
-      }
-      statusEl.innerText = `Показано: ${items.length}`;
+      await loadTrashProducts(false);
+      renderTrashTable();
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
+      document.getElementById("trashTable").innerHTML =
+        `<tr><td colspan="6" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
       statusEl.innerText = "";
     }
   }
