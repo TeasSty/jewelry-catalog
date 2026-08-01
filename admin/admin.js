@@ -7,8 +7,10 @@
     getDoc,
     setDoc,
     deleteDoc,
+    deleteField,
     getDocs,
     query,
+    where,
     orderBy,
     limit,
     updateDoc,
@@ -125,7 +127,7 @@
     }
     // Те же проверки делает и воркер — здесь они только чтобы не гонять зря
     // мегабайты по сети и сразу показать понятную ошибку.
-    if (!/^image\//.test(file.type || "")) throw new Error("Выбранный файл — не изображение");
+    if (!/^image\//.test(file.type || "") || file.type === "image/svg+xml") throw new Error("Выбранный файл — не изображение");
     if (file.size > MAX_UPLOAD_BYTES) throw new Error("Файл больше 8 МБ — сожмите фото");
 
     const idToken = await auth.currentUser.getIdToken();
@@ -242,8 +244,10 @@
     document.getElementById("authContainer").style.display = "none";
     document.getElementById("adminInterface").style.display = "block";
     allProductsCache = null; // на случай повторного входа в этой же вкладке
+    trashCache = null;
     refreshProductsList();
     loadOrders();
+    refreshTrashList();
   }
 
   // Права один раз подтверждались для этого аккаунта на этом устройстве — запоминаем,
@@ -380,6 +384,13 @@
       if (!docSnap.exists()) {
         // Если товар новый, прокидываем время создания
         updateData.createdAt = serverTimestamp();
+      } else if (docSnap.data().deleted === true) {
+        // Этот SKU сейчас лежит в Корзине (deleted:true). Обычная форма не должна
+        // молча сохранять правки в невидимый везде документ — сохранение через неё
+        // расценивается как явное "верните товар в каталог", поэтому снимаем пометку.
+        // Восстановление через саму Корзину (кнопка "Восстановить") делает то же самое.
+        updateData.deleted = deleteField();
+        updateData.deletedAt = deleteField();
       }
 
       // Безопасное сохранение без перезаписи createdAt для старых товаров
@@ -472,17 +483,90 @@
     });
 
     tbody.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        const skuToDelete = e.target.dataset.sku;
-        if (confirm(`Вы уверены, что хотите безвозвратно удалить товар ${skuToDelete}?`)) {
-          try {
-            await deleteDoc(doc(db, "products", skuToDelete));
-            if (onDeleted) onDeleted(skuToDelete);
-          } catch (err) {
-            alert("Ошибка при удалении: " + err.message);
-          }
-        }
+      btn.addEventListener("click", (e) => {
+        const row = e.target.closest("tr");
+        startPendingDelete(row, row.dataset.sku, onDeleted);
       });
+    });
+  }
+
+  // ===== УДАЛЕНИЕ ТОВАРА: отложенное, с отменой (10 секунд) =====
+  // Клик по "Удалить" ничего не пишет в Firestore. Строка сразу гаснет, снизу
+  // появляется тост с прогресс-баром и кнопкой "Отменить" — и только если все 10
+  // секунд прошли без отмены, товар помечается deleted:true (не удаляется физически,
+  // окончательное удаление — только из Корзины, вручную или автоочисткой через 30
+  // дней). Сама десятисекундная задержка и есть точка невозврата: до её истечения
+  // откатывать нечего, ничего ещё не записано.
+  const UNDO_DELETE_MS = 10000;
+  const pendingDeletes = new Map(); // sku -> true, пока идёт отсчёт — защита от повторного клика
+
+  function pendingDeleteLabel(row, sku) {
+    const catLabel = CATEGORY_NAMES[row.dataset.category] || row.dataset.category || "";
+    const subLabel = row.dataset.subcategory ? ` / ${row.dataset.subcategory}` : "";
+    return catLabel ? `${sku} — ${catLabel}${subLabel}` : sku;
+  }
+
+  function dismissToast(toast) {
+    toast.classList.add("toast-out");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  }
+
+  function startPendingDelete(row, sku, onCommitted) {
+    if (pendingDeletes.has(sku)) return; // уже отсчитывается — вторая попытка игнорируется
+
+    pendingDeletes.set(sku, true);
+    row.classList.add("row-pending-delete");
+    row.querySelectorAll(".edit-btn, .delete-btn").forEach(b => b.disabled = true);
+
+    const toast = document.createElement("div");
+    toast.className = "toast";
+    toast.innerHTML = `
+      <div class="toast-row">
+        <div class="toast-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </div>
+        <div class="toast-text">Товар «<b>${escapeHtml(pendingDeleteLabel(row, sku))}</b>» помечен на удаление</div>
+      </div>
+      <div class="toast-progress-track"><div class="toast-progress-bar"></div></div>
+      <button type="button" class="toast-undo-btn">Отменить</button>
+    `;
+    document.getElementById("toastContainer").appendChild(toast);
+
+    // Анимация прогресс-бара запускается следующим кадром: если сразу же выставить
+    // transition и целевую ширину в один момент, браузер иногда схлопывает переход
+    // от "100%" к "100%" и полоса не двигается вовсе.
+    const bar = toast.querySelector(".toast-progress-bar");
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${UNDO_DELETE_MS}ms linear`;
+      requestAnimationFrame(() => { bar.style.width = "0%"; });
+    });
+
+    const timeoutId = setTimeout(async () => {
+      dismissToast(toast);
+      try {
+        await updateDoc(doc(db, "products", sku), {
+          deleted: true,
+          deletedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        pendingDeletes.delete(sku);
+        if (onCommitted) onCommitted(sku);
+      } catch (err) {
+        // Запись не прошла (например, сеть отвалилась) — возвращаем строку в обычный
+        // вид, а не оставляем её молча "полуудалённой" только в интерфейсе.
+        pendingDeletes.delete(sku);
+        row.classList.remove("row-pending-delete");
+        row.querySelectorAll(".edit-btn, .delete-btn").forEach(b => b.disabled = false);
+        alert("Не удалось удалить товар: " + err.message);
+      }
+    }, UNDO_DELETE_MS);
+
+    toast.querySelector(".toast-undo-btn").addEventListener("click", () => {
+      clearTimeout(timeoutId);
+      pendingDeletes.delete(sku);
+      row.classList.remove("row-pending-delete");
+      row.querySelectorAll(".edit-btn, .delete-btn").forEach(b => b.disabled = false);
+      dismissToast(toast);
     });
   }
 
@@ -525,7 +609,9 @@
     if (loadingPromise) return loadingPromise;
     loadingPromise = (async () => {
       const snapshot = await getDocs(collection(db, "products"));
-      allProductsCache = snapshot.docs.map(d => d.data());
+      // Товары в Корзине (deleted:true) не входят в обычный список/поиск/подбор фото
+      // для заказов — у них отдельная вкладка и отдельный запрос, см. loadTrashProducts().
+      allProductsCache = snapshot.docs.map(d => d.data()).filter(item => item.deleted !== true);
       allProductsCache.forEach(item => { item.skuNorm = normalizeForSearch(item.sku); });
       allProductsCache.sort((a, b) => (a.sku || "").localeCompare(b.sku || "", "ru", { numeric: true }));
       return allProductsCache;
@@ -695,5 +781,125 @@
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
       statusEl.textContent = "";
+    }
+  }
+
+  // ===== КОРЗИНА: товары, помеченные на удаление (deleted:true) =====
+  // Срок хранения должен совпадать с автоочисткой в Cloudflare Worker (scheduled
+  // handler в worker/index.js) — там 30 дней зашиты отдельно, это два разных места
+  // по той же причине, что и с GARNITURY_RING_PREFIXES выше: клиент и сервер не могут
+  // читать константы друг у друга, поэтому оба значения нужно менять вместе.
+  const TRASH_LIFETIME_DAYS = 30;
+  let trashCache = null;
+
+  function toDateSafe(value) {
+    return value && typeof value.toDate === "function" ? value.toDate() : null;
+  }
+
+  function daysLeftUntilPurge(deletedAt) {
+    const date = toDateSafe(deletedAt);
+    if (!date) return null;
+    const elapsedDays = (Date.now() - date.getTime()) / 86400000;
+    return Math.max(0, Math.ceil(TRASH_LIFETIME_DAYS - elapsedDays));
+  }
+
+  // where("deleted","==",true) без orderBy — сортируем на клиенте (как и основной
+  // список товаров) по deletedAt. Композитный индекс "deleted == true, orderBy
+  // deletedAt" Firestore для одной равенственной проверки не требует, но опускаем
+  // orderBy намеренно: он не нужен без индекса, и незачем заводить индекс ради одной
+  // редко используемой вкладки, когда клиентская сортировка стоит одну строку кода.
+  async function loadTrashProducts(force) {
+    if (trashCache && !force) return trashCache;
+    const q = query(collection(db, "products"), where("deleted", "==", true));
+    const snapshot = await getDocs(q);
+    trashCache = snapshot.docs.map(d => d.data());
+    trashCache.sort((a, b) => (toDateSafe(b.deletedAt)?.getTime() || 0) - (toDateSafe(a.deletedAt)?.getTime() || 0));
+    return trashCache;
+  }
+
+  function trashRowHtml(item) {
+    const image = resolveImagePathForPreview(item.image || item.img || "");
+    const catLabel = CATEGORY_NAMES[item.category] || item.category || "";
+    const deletedDate = toDateSafe(item.deletedAt);
+    const daysLeft = daysLeftUntilPurge(item.deletedAt);
+    const urgent = daysLeft !== null && daysLeft <= 3;
+
+    return `
+      <tr data-sku="${escapeHtml(item.sku)}">
+        <td>${image
+          ? `<img src="${escapeHtml(image)}" alt="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;background:#f4f4f2;">`
+          : `<div style="width:40px;height:40px;border-radius:6px;background:var(--surface-2);"></div>`}</td>
+        <td><strong>${escapeHtml(item.sku)}</strong></td>
+        <td>${escapeHtml(catLabel)}${item.subcategory ? ` / ${escapeHtml(item.subcategory)}` : ""}</td>
+        <td style="white-space:nowrap;">${deletedDate ? deletedDate.toLocaleDateString("ru") : "—"}</td>
+        <td><span class="trash-days-left${urgent ? " trash-days-urgent" : ""}">${daysLeft === null ? "—" : `${daysLeft} дн.`}</span></td>
+        <td style="white-space:nowrap;">
+          <button class="restore-btn" style="width:auto;" data-sku="${escapeHtml(item.sku)}">Восстановить</button>
+          <button class="purge-btn" style="width:auto;" data-sku="${escapeHtml(item.sku)}">Удалить навсегда</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function attachTrashHandlers(tbody) {
+    tbody.querySelectorAll(".restore-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const sku = e.currentTarget.dataset.sku;
+        const row = e.currentTarget.closest("tr");
+        row.querySelectorAll("button").forEach(b => b.disabled = true);
+        try {
+          // deleteField(), а не deleted:false — восстановленный товар должен снова
+          // выглядеть ровно как обычный, никогда не побывавший в Корзине документ
+          // (без лишних ключей), а не как товар с deleted:false навечно в схеме.
+          await updateDoc(doc(db, "products", sku), {
+            deleted: deleteField(),
+            deletedAt: deleteField(),
+            updatedAt: serverTimestamp()
+          });
+          trashCache = (trashCache || []).filter(it => it.sku !== sku);
+          allProductsCache = null; // список товаров устарел — восстановленный товар должен снова быть в нём
+          refreshTrashList();
+        } catch (err) {
+          alert("Не удалось восстановить товар: " + err.message);
+          row.querySelectorAll("button").forEach(b => b.disabled = false);
+        }
+      });
+    });
+
+    tbody.querySelectorAll(".purge-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const sku = e.currentTarget.dataset.sku;
+        if (!confirm(`Удалить товар ${sku} НАВСЕГДА? Это действие необратимо.`)) return;
+        const row = e.currentTarget.closest("tr");
+        row.querySelectorAll("button").forEach(b => b.disabled = true);
+        try {
+          await deleteDoc(doc(db, "products", sku));
+          trashCache = (trashCache || []).filter(it => it.sku !== sku);
+          refreshTrashList();
+        } catch (err) {
+          alert("Не удалось удалить товар: " + err.message);
+          row.querySelectorAll("button").forEach(b => b.disabled = false);
+        }
+      });
+    });
+  }
+
+  async function refreshTrashList() {
+    const tbody = document.getElementById("trashTable");
+    const statusEl = document.getElementById("trashStatus");
+    statusEl.innerText = trashCache ? "" : "Загрузка корзины...";
+
+    try {
+      const items = await loadTrashProducts(false);
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);">Корзина пуста</td></tr>`;
+      } else {
+        tbody.innerHTML = items.map(trashRowHtml).join("");
+        attachTrashHandlers(tbody);
+      }
+      statusEl.innerText = `Показано: ${items.length}`;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
+      statusEl.innerText = "";
     }
   }

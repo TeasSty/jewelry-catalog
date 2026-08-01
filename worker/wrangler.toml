@@ -4,7 +4,6 @@ compatibility_date = "2024-11-01"
 
 # Открытые значения — их видно в коде сайта, секретного в них ничего нет.
 [vars]
-FIREBASE_API_KEY = "AIzaSyDKo5f366jIkLQVlrL9GHIHt_6dgHvIhUs"
 FIREBASE_PROJECT_ID = "voronin-jewelry"
 # Через запятую можно перечислить несколько адресов (например, локальную проверку)
 ALLOWED_ORIGIN = "https://voroninkostroma.ru"
@@ -13,3 +12,11 @@ ALLOWED_ORIGIN = "https://voroninkostroma.ru"
 #   wrangler secret put TELEGRAM_BOT_TOKEN
 #   wrangler secret put TELEGRAM_CHAT_ID
 #   wrangler secret put IMGBB_API_KEY
+#   wrangler secret put FIREBASE_SA_EMAIL
+#   wrangler secret put FIREBASE_SA_PRIVATE_KEY
+
+# Автоочистка Корзины (см. scheduled() в index.js) — раз в сутки в 03:00 UTC,
+# со сдвигом от полуночного полного прохода scripts/sync-catalog.mjs, чтобы в логах
+# двух независимых систем не путались события в одну и ту же минуту.
+[triggers]
+crons = ["0 3 * * *"]

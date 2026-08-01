@@ -109,13 +109,26 @@ const forceFullSync = isManualRun || isDailyFullSync || !existing.lastSyncAt;
 const now = new Date().toISOString();
 let items;
 
+// Товары, помеченные на удаление в Корзине /admin/ (поле deleted:true), остаются
+// документами в Firestore (см. firestore.rules) — но каталог сайта их показывать
+// не должен. Firestore-правила чтения products нарочно не трогали (allow read: if
+// true, как и раньше — в удалённом товаре нет ничего секретного), поэтому именно
+// здесь, при сборке catalog.json, — единственное место, где это нужно отфильтровать.
 if (forceFullSync) {
-  items = await fetchAllProducts();
+  items = (await fetchAllProducts()).filter(item => item.deleted !== true);
   console.log(`Полный проход. Синхронизировано товаров: ${items.length}`);
 } else {
   const changed = await fetchChangedSince(existing.lastSyncAt);
   const bySku = new Map(existing.items.map(item => [item.sku || item.id, item]));
-  for (const item of changed) bySku.set(item.sku || item.id, item);
+  for (const item of changed) {
+    const key = item.sku || item.id;
+    // Свежепомеченный на удаление товар убираем из каталога, а не оставляем в нём
+    // с deleted:true — иначе catalog.json пришлось бы дополнительно фильтровать
+    // ещё и на стороне app.js. Восстановленный товар (deleted снят) просто попадает
+    // в обычную ветку ниже, как любое другое изменение.
+    if (item.deleted === true) bySku.delete(key);
+    else bySku.set(key, item);
+  }
   items = [...bySku.values()];
   console.log(`Инкрементальный проход. Изменено товаров: ${changed.length}, всего в каталоге: ${items.length}`);
 }

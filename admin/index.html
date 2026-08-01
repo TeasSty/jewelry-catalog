@@ -101,11 +101,59 @@
     th { font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); background: var(--surface-2); }
     tbody tr:last-child td { border-bottom: none; }
     tbody tr:hover { background: var(--surface-2); }
-    .delete-btn, .edit-btn {
+    .delete-btn, .edit-btn, .restore-btn, .purge-btn {
       width: auto; padding: 5px 10px; font-size: 12px; border-radius: 6px; font-weight: 700;
     }
     .delete-btn { background: var(--red); color: #fff; }
     .edit-btn { background: var(--green); color: #10321a; margin-right: 4px; }
+    .restore-btn { background: var(--accent); color: #1a1a1a; margin-right: 4px; }
+    .purge-btn { background: transparent; color: var(--red); border: 1px solid var(--border); }
+    .purge-btn:hover { background: rgba(239,83,80,.08); border-color: var(--red); }
+
+    /* ===== Тост "товар помечен на удаление" — отмена в течение 10 секунд ===== */
+    /* Ничего не пишется в Firestore, пока этот тост на экране — сама отсрочка и
+       есть точка невозврата, см. startPendingDelete() в admin.js. */
+    .toast-container {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      display: flex; flex-direction: column-reverse; gap: 10px; z-index: 500;
+      width: min(380px, calc(100vw - 32px)); pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+      border-radius: 10px; box-shadow: var(--shadow);
+      padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px;
+      animation: toast-in .28s cubic-bezier(.2,.8,.2,1);
+    }
+    .toast.toast-out { animation: toast-out .2s ease forwards; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+    @keyframes toast-out { to { opacity: 0; transform: translateY(8px) scale(.96); } }
+
+    .toast-row { display: flex; align-items: flex-start; gap: 10px; }
+    .toast-icon {
+      flex: none; width: 30px; height: 30px; border-radius: 8px;
+      background: rgba(239,83,80,.14); color: var(--red);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .toast-text { font-size: 13.5px; line-height: 1.45; color: var(--text-dim); padding-top: 4px; }
+    .toast-text b { color: #fff; font-weight: 700; }
+
+    .toast-progress-track { height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; }
+    .toast-progress-bar { height: 100%; width: 100%; background: var(--accent); }
+
+    .toast-undo-btn {
+      align-self: flex-end; width: auto; background: none; color: var(--accent);
+      border: 1px solid var(--accent-dim); font-weight: 700; font-size: 12.5px;
+      padding: 6px 14px; border-radius: 7px;
+    }
+    .toast-undo-btn:hover { background: rgba(201,162,75,.1); }
+
+    /* Строка товара, ожидающая удаления (10 секунд до soft-delete в Firestore) */
+    tr.row-pending-delete { opacity: .35; transition: opacity .25s ease; }
+
+    /* ===== Корзина ===== */
+    .trash-days-left { font-weight: 700; color: var(--text-dim); }
+    .trash-days-urgent { color: var(--red); }
 
     select.order-status-select {
       background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
@@ -184,6 +232,7 @@
       <div class="admin-tabs">
         <button class="admin-tab active" data-tab="orders" type="button">Заказы</button>
         <button class="admin-tab" data-tab="editor" type="button">Редактор товаров</button>
+        <button class="admin-tab" data-tab="trash" type="button">🗑 Корзина</button>
       </div>
       <button id="logoutBtn" class="btn-ghost" type="button">Выйти</button>
     </div>
@@ -321,8 +370,45 @@
         </div>
       </div>
     </div>
+
+    <!-- Корзина: товары, помеченные на удаление (deleted:true в том же документе products/{sku}).
+         Хранятся здесь 30 дней — потом автоочистка (Cloudflare Worker, Cron Trigger) удаляет
+         их окончательно сама, без участия администратора. См. admin.js, раздел "КОРЗИНА". -->
+    <div class="admin-panel" data-panel="trash" style="display:none;">
+      <div class="card">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Корзина
+        </h2>
+        <div id="trashStatus" style="font-size: 13px; color: var(--text-dim); margin-bottom: 10px;"></div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Фото</th>
+                <th>Артикул</th>
+                <th>Категория</th>
+                <th>Удалён</th>
+                <th>Осталось</th>
+                <th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="trashTable">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-dim);">Загрузка корзины...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
+
+<!-- Тосты "товар помечен на удаление" — вне вкладок нарочно: должны быть видны
+     независимо от того, какая вкладка сейчас открыта (например, начали удаление,
+     затем на 10 секунд переключились в "Заказы" — таймер и тост не должны пропасть). -->
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
 <script type="module" src="admin.js"></script>
 </body>

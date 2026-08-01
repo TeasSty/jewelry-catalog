@@ -52,7 +52,8 @@ service cloud.firestore {
       function validProduct() {
         let d = request.resource.data;
         return d.keys().hasOnly(['sku', 'name', 'weight', 'category', 'subcategory',
-                                 'image', 'images', 'sizes', 'createdAt', 'updatedAt'])
+                                 'image', 'images', 'sizes', 'createdAt', 'updatedAt',
+                                 'deleted', 'deletedAt'])
           && isString(d.sku, 120)
           && d.sku == productId
           && isString(d.name, 120)
@@ -70,7 +71,15 @@ service cloud.firestore {
           // здесь не проверить (в правилах Firestore нет поэлементного forEach), но
           // это поле влияет только на то, какие размеры показаны в пикере, а не на
           // деньги или доступ, так что риска в этом нет.
-          && (!('sizes' in d) || (d.sizes is list && d.sizes.size() <= 30));
+          && (!('sizes' in d) || (d.sizes is list && d.sizes.size() <= 30))
+          // Мягкое удаление (Корзина в /admin/): товар остаётся документом в той же
+          // коллекции, просто помечается двумя полями — читается по-прежнему всем
+          // (allow read: if true не менялся, см. sync-catalog.mjs и admin.js — они
+          // сами исключают deleted:true из каталога и списков, ничего секретного
+          // в удалённом товаре нет), а вот ПОМЕТИТЬ/СНЯТЬ пометку и окончательно
+          // удалить (allow delete ниже) может только администратор.
+          && (!('deleted' in d) || d.deleted is bool)
+          && (!('deletedAt' in d) || d.deletedAt == null || d.deletedAt is timestamp);
       }
     }
 

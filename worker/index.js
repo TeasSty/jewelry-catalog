@@ -8,7 +8,7 @@
  * в аккаунт ImgBB. Теперь ключи хранятся как секреты воркера, а браузер обращается
  * сюда и обязан предъявить токен входа Firebase.
  *
- * Два маршрута:
+ * Два HTTP-маршрута:
  *   POST /notify — уведомление о новом заказе в Telegram.
  *                  Пускает вошедшего покупателя с подтверждённой почтой.
  *                  Текст сообщения собирается ЗДЕСЬ, а не на клиенте, — иначе через
@@ -17,13 +17,26 @@
  *                  Пускает только администратора (проверяется документ admins/<uid>
  *                  в Firestore токеном самого вызывающего — сервисный ключ не нужен).
  *
+ * Плюс один Cron Trigger (см. scheduled() и [triggers] в wrangler.toml):
+ *   ежедневная автоочистка Корзины — товары /admin/ с deleted:true старше 30 дней
+ *   удаляются из Firestore насовсем, без участия администратора. У этой задачи нет
+ *   пользователя с токеном в сессии, поэтому она — единственное место в проекте,
+ *   где используется сервисный аккаунт Firebase (privileged-доступ в обход правил
+ *   Firestore, как и полагается серверной фоновой задаче).
+ *
  * Развёртывание — см. SECURITY.md, раздел «Как поднять воркер».
  *
  * Секреты (wrangler secret put ИМЯ):
- *   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, IMGBB_API_KEY
+ *   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, IMGBB_API_KEY,
+ *   FIREBASE_SA_EMAIL, FIREBASE_SA_PRIVATE_KEY (сервисный аккаунт для автоочистки —
+ *   роль в IAM должна быть сужена до Cloud Datastore User, не Editor всего проекта)
  * Обычные переменные (vars в wrangler.toml):
- *   FIREBASE_API_KEY, FIREBASE_PROJECT_ID, ALLOWED_ORIGIN
+ *   FIREBASE_PROJECT_ID, ALLOWED_ORIGIN
+ * (FIREBASE_API_KEY для проверки токена больше не нужен — verifyIdToken проверяет
+ * подпись локально по публичным ключам Google, см. ниже.)
  */
+
+import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from "jose";
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // ImgBB всё равно не принимает больше 32 МБ, но фото товара — это сотни КБ
 const MAX_ITEMS = 100;
@@ -57,6 +70,18 @@ export default {
       console.error(err);
       return json({ error: "Internal error" }, 500, corsOrigin);
     }
+  },
+
+  // Cron Trigger — расписание в wrangler.toml, [triggers].crons. waitUntil держит
+  // воркер живым до конца очистки: без него Cloudflare может остановить изолят сразу
+  // после возврата из scheduled(), оборвав ещё не завершённые запросы к Firestore.
+  // Ошибку глотаем здесь же (а не даём упасть необработанной) — если сервисный
+  // аккаунт ещё не настроен или Google недоступен, это не должно шуметь как сбой
+  // воркера в целом, только в логах (wrangler tail) до следующего запуска по расписанию.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      purgeExpiredTrash(env).catch(err => console.error("Автоочистка Корзины не удалась:", err))
+    );
   }
 };
 
@@ -84,29 +109,71 @@ function json(body, status, origin) {
   });
 }
 
+// Публичные ключи Google для проверки подписи Firebase ID Token — открытый эндпоинт,
+// без API-ключа и без секретов. Тот же набор ключей, которым для той же задачи
+// пользуется сам Firebase Admin SDK (см. официальную схему проверки:
+// https://firebase.google.com/docs/auth/admin/verify-id-tokens#verify_id_tokens_using_a_third-party_jwt_library).
+//
+// createRemoteJWKSet создаётся один раз на уровне модуля, а не внутри запроса —
+// в Cloudflare Workers модульная область видимости переживает "тёплые" вызовы того
+// же изолята, поэтому кэш ключей внутри jose реально работает между запросами, а не
+// только внутри одного. cacheMaxAge — близко к Cache-Control, который реально отдаёт
+// этот эндпоинт Google (проверено вручную: ~6.6 часа); jose всё равно досрочно
+// обновит набор сам, если встретит token с неизвестным kid (ротация ключей Google).
+const JWKS = createRemoteJWKSet(
+  new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"),
+  { cacheMaxAge: 6 * 60 * 60 * 1000, cooldownDuration: 30 * 1000 }
+);
+
 /**
- * Проверяет токен входа Firebase через официальный эндпоинт Google.
- * Возвращает данные пользователя либо null, если токен поддельный/просроченный.
- * Публичный ключ FIREBASE_API_KEY здесь уместен — он и так виден в коде сайта
- * и сам по себе ничего не открывает, вся защита в правилах Firestore.
+ * Проверяет Firebase ID Token локально, по официальной схеме Firebase для сред без
+ * Admin SDK — без единого сетевого похода к Identity Toolkit и без API-ключа:
+ *
+ *  - подпись RS256 проверяется по публичному ключу Google (сам jwtVerify находит
+ *    нужный ключ по kid из заголовка токена в наборе JWKS);
+ *  - algorithms:["RS256"] — жёсткое ограничение алгоритма. Без этого атакующий мог
+ *    бы прислать токен с alg:"none" или другим неожиданным алгоритмом и обмануть
+ *    менее строгую проверку — jose с явным списком алгоритмов такой токен отклонит
+ *    ещё до попытки проверить подпись;
+ *  - issuer — обязан быть https://securetoken.google.com/<projectId>: отсекает
+ *    валidные-но-чужие токены (например, от другого Firebase-проекта);
+ *  - audience — обязан быть <projectId>: тот же смысл с другой стороны (aud);
+ *  - exp/iat — проверяет сам jwtVerify (истёкший или "из будущего" токен отклоняется);
+ *  - sub — обязательное поле, это и есть Firebase uid; user_id (если есть в токене)
+ *    должен ему совпадать — доп. защита от токена с несогласованными полями;
+ *  - auth_time — должен быть не позже текущего момента (с запасом в 5 секунд на
+ *    рассинхрон часов) — иначе токен структурно бессмыслен.
+ *
+ * Чего эта проверка НЕ делает (сознательный компромисс, обсуждён отдельно): не видит
+ * live-статус disabled аккаунта — это единственное, что раньше давал вызов
+ * accounts:lookup. У Firebase ID Token и так короткий срок жизни (1 час), а функция
+ * "заблокировать покупателя" в админке сегодня не реализована — ручной бан через
+ * Firebase Console подействует не мгновенно, а в пределах часа. isAdmin() ниже эту
+ * проверку не использует вообще — админ-права читаются отдельным Firestore-запросом.
  */
 async function verifyIdToken(idToken, env) {
   if (typeof idToken !== "string" || idToken.length < 20 || idToken.length > 4096) return null;
 
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken })
-    }
-  );
-  if (!res.ok) return null;
+  let payload;
+  try {
+    ({ payload } = await jwtVerify(idToken, JWKS, {
+      issuer: `https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}`,
+      audience: env.FIREBASE_PROJECT_ID,
+      algorithms: ["RS256"]
+    }));
+  } catch {
+    return null; // просрочен / неверная подпись / не тот issuer или audience / битый формат
+  }
 
-  const data = await res.json();
-  const user = data.users && data.users[0];
-  if (!user || user.disabled) return null;
-  return user;
+  if (typeof payload.sub !== "string" || !payload.sub) return null;
+  if (payload.user_id !== undefined && payload.user_id !== payload.sub) return null;
+  if (typeof payload.auth_time !== "number" || payload.auth_time > Math.floor(Date.now() / 1000) + 5) return null;
+
+  return {
+    localId: payload.sub,
+    email: typeof payload.email === "string" ? payload.email : null,
+    emailVerified: payload.email_verified === true
+  };
 }
 
 /** Есть ли документ admins/<uid>. Читаем токеном самого пользователя — правила
@@ -115,6 +182,119 @@ async function isAdmin(uid, idToken, env) {
   const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/admins/${encodeURIComponent(uid)}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
   return res.status === 200;
+}
+
+// ===== Автоочистка Корзины (Cron Trigger, без пользователя в сессии) =====
+
+// Должно совпадать с TRASH_LIFETIME_DAYS в admin/admin.js — то же ограничение, что
+// и с GARNITURY_RING_PREFIXES там же: клиент и сервер не читают константы друг у
+// друга, поэтому при изменении срока хранения менять нужно оба места.
+const PURGE_AFTER_DAYS = 30;
+
+/**
+ * OAuth2-токен доступа по служебному аккаунту Firebase (JWT-bearer grant,
+ * RFC 7523) — единственный способ получить привилегированный доступ к Firestore
+ * (в обход правил безопасности) без интерактивного пользователя в сессии, что
+ * ровно наш случай: Cron Trigger срабатывает сам, никто в этот момент не заходил
+ * на сайт и не может предъявить свой ID-токен. Роль аккаунта в IAM должна быть
+ * сужена до Cloud Datastore User — см. инструкцию в SECURITY.md, чтобы утечка
+ * этого секрета не давала доступа шире, чем нужно этой же одной задаче.
+ */
+async function getServiceAccountAccessToken(env) {
+  // \n может прийти как настоящий перевод строки или как два символа "\" + "n" —
+  // зависит от того, как именно значение вставили через `wrangler secret put`
+  // (напрямую из скачанного .json один в один или руками). Нормализуем в любом случае.
+  const privateKey = await importPKCS8(env.FIREBASE_SA_PRIVATE_KEY.replace(/\\n/g, "\n"), "RS256");
+  const now = Math.floor(Date.now() / 1000);
+
+  const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/datastore" })
+    .setProtectedHeader({ alg: "RS256" })
+    .setIssuer(env.FIREBASE_SA_EMAIL)
+    .setSubject(env.FIREBASE_SA_EMAIL)
+    .setAudience("https://oauth2.googleapis.com/token")
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(privateKey);
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion
+    })
+  });
+  if (!res.ok) throw new Error(`Обмен JWT на токен сервисного аккаунта не удался: HTTP ${res.status}: ${await res.text()}`);
+
+  const data = await res.json();
+  return data.access_token;
+}
+
+/**
+ * Ищет в коллекции products товары с deleted:true и удаляет насовсем те, что
+ * помечены больше PURGE_AFTER_DAYS дней назад.
+ *
+ * Запрос — только "where deleted == true" (одно равенство, обычный автоматический
+ * индекс Firestore, composite index заводить не нужно). Порог по deletedAt проверяем
+ * уже здесь, в памяти воркера, а не добавляем его вторым условием в сам запрос:
+ * "равенство по одному полю + диапазон по другому" потребовал бы отдельного составного
+ * индекса ради одной редкой фоновой задачи раз в сутки — Корзина по объёму небольшая
+ * (это отложенные на удаление товары одного небольшого каталога), прочитать её целиком
+ * и отфильтровать на месте дешевле, чем поддерживать индекс только для этого.
+ */
+async function purgeExpiredTrash(env) {
+  const accessToken = await getServiceAccountAccessToken(env);
+  const authHeader = { Authorization: `Bearer ${accessToken}` };
+
+  const queryRes = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "products" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "deleted" },
+              op: "EQUAL",
+              value: { booleanValue: true }
+            }
+          }
+        }
+      })
+    }
+  );
+  if (!queryRes.ok) throw new Error(`runQuery HTTP ${queryRes.status}: ${await queryRes.text()}`);
+
+  const rows = await queryRes.json();
+  const cutoffMs = Date.now() - PURGE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+
+  const candidates = rows
+    .filter(row => row.document)
+    .map(row => ({
+      name: row.document.name, // полный путь: projects/.../databases/(default)/documents/products/{sku}
+      deletedAt: row.document.fields?.deletedAt?.timestampValue || null
+    }));
+
+  const toPurge = candidates.filter(item => item.deletedAt && new Date(item.deletedAt).getTime() <= cutoffMs);
+
+  console.log(`Автоочистка Корзины: в корзине ${candidates.length}, старше ${PURGE_AFTER_DAYS} дней — ${toPurge.length}`);
+
+  for (const item of toPurge) {
+    // Удаление несуществующего документа Firestore не считает ошибкой (идемпотентно) —
+    // безопасно и на случай, если один и тот же запуск Cron Trigger почему-то
+    // выполнится дважды (Cloudflare гарантирует "не реже раза", а не "ровно раз").
+    const delRes = await fetch(`https://firestore.googleapis.com/v1/${item.name}`, {
+      method: "DELETE",
+      headers: authHeader
+    });
+    if (!delRes.ok) {
+      console.error(`Не удалось окончательно удалить ${item.name}: HTTP ${delRes.status}`);
+    } else {
+      console.log(`Окончательно удалён (был в Корзине с ${item.deletedAt}): ${item.name}`);
+    }
+  }
 }
 
 // ===== /notify =====
@@ -209,7 +389,10 @@ async function handleUpload(request, env, corsOrigin) {
   const file = form.get("image");
   if (!file || typeof file === "string") return json({ error: "No image" }, 400, corsOrigin);
   if (file.size > MAX_UPLOAD_BYTES) return json({ error: "Image too large" }, 413, corsOrigin);
-  if (!/^image\//.test(file.type || "")) return json({ error: "Not an image" }, 415, corsOrigin);
+  // SVG отдельно исключён: это единственный "картиночный" формат, способный нести
+  // исполняемый <script> — при прямом переходе по ссылке на файл он бы выполнился
+  // в origin хостинга картинок (не нашего сайта, но всё равно незачем это пускать).
+  if (!/^image\//.test(file.type || "") || file.type === "image/svg+xml") return json({ error: "Not an image" }, 415, corsOrigin);
 
   const out = new FormData();
   out.append("image", file, "upload");
