@@ -14,6 +14,12 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<!-- Инлайн и ДО тега CSP нарочно — см. подробный комментарий в index.html
+     (та же логика, слово в слово): meta-CSP не действует на то, что стоит
+     в документе перед ней, а инлайн (без похода в сеть за файлом) — то,
+     что реально успевает до восстановления скролла браузером при reload. -->
+<script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+<script src="scroll-restore.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 

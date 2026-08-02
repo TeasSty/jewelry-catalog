@@ -3,6 +3,12 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <!-- Инлайн и ДО тега CSP нарочно — см. подробный комментарий в index.html
+       (та же логика, слово в слово): meta-CSP не действует на то, что стоит
+       в документе перед ней, а инлайн (без похода в сеть за файлом) — то,
+       что реально успевает до восстановления скролла браузером при reload. -->
+  <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+  <script src="../scroll-restore.js"></script>
 
   <!-- Пояснение к политике — см. index.html. Отличия для панели:
        blob: в img-src нужен для превью выбранного фото до его отправки (URL.createObjectURL),
