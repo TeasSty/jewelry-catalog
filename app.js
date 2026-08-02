@@ -1563,15 +1563,22 @@
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
     if (isStandalone) return;
 
-    // User-Agent для определения iOS — обычно решение так себе (легко подделать,
-    // легко устареет), но тут это не защита, а просто "какую инструкцию
-    // показать" — худший случай ошибки: кто-то увидит не тот текст, не более.
+    // User-Agent для определения платформы — обычно решение так себе (легко
+    // подделать, легко устареет), но тут это не защита, а просто "какой текст
+    // инструкции показать" — худший случай ошибки: кто-то увидит не тот текст,
+    // не более.
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /android/i.test(navigator.userAgent);
+
+    const ANDROID_STEPS = `
+      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span>Откройте меню браузера (обычно ⋮ в углу экрана)</li>
+      <li>Найдите пункт «Установить приложение» или «Добавить на главный экран»</li>
+      <li>Подтвердите — значок появится на главном экране</li>`;
 
     let deferredPrompt = null;
-    // Chrome/Edge/Android сами решают, когда именно прислать это событие
-    // (обычно не сразу, а после какого-то вовлечения пользователя) — до этого
-    // момента кнопки просто не видно, тут её нечем было бы наполнить.
+    // Chrome/Edge сами решают, когда именно прислать это событие (обычно не
+    // сразу, а после какого-то вовлечения пользователя) — до этого момента
+    // кнопки просто не видно, тут её нечем было бы наполнить.
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
@@ -1583,7 +1590,20 @@
     // вместо системного диалога, потому что системного диалога тут не будет.
     if (isIOS) btn.style.display = "";
 
+    // Часть Android-браузеров (замечено на Яндекс.Браузере) заявляют себя
+    // Chromium-совместимыми, но beforeinstallprompt либо не шлют вовсе, либо
+    // непредсказуемо. Если через разумное время после загрузки события так и
+    // не было — показываем кнопку всё равно, с ручной инструкцией вместо
+    // системного диалога: лучше так, чем кнопка, которая никогда не появится.
+    let androidFallbackTimer = null;
+    if (isAndroid && !isIOS) {
+      androidFallbackTimer = setTimeout(() => {
+        if (!deferredPrompt) btn.style.display = "";
+      }, 3000);
+    }
+
     const installIosOverlay = document.getElementById("installIosOverlay");
+    const installStepsList = document.getElementById("installStepsList");
     btn.addEventListener("click", async () => {
       if (deferredPrompt) {
         deferredPrompt.prompt();
@@ -1592,10 +1612,18 @@
         if (choice.outcome === "accepted") btn.style.display = "none";
         return;
       }
-      if (isIOS && installIosOverlay) installIosOverlay.classList.add("show");
+      if (!installIosOverlay) return;
+      if (!isIOS && installStepsList) {
+        document.getElementById("installIosTitle").textContent = "Установка на Android";
+        installStepsList.innerHTML = ANDROID_STEPS;
+      }
+      installIosOverlay.classList.add("show");
     });
 
-    window.addEventListener("appinstalled", () => { btn.style.display = "none"; });
+    window.addEventListener("appinstalled", () => {
+      btn.style.display = "none";
+      clearTimeout(androidFallbackTimer);
+    });
 
     if (installIosOverlay) {
       document.getElementById("installIosClose").addEventListener("click", () => installIosOverlay.classList.remove("show"));
