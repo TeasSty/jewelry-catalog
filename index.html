@@ -83,6 +83,16 @@
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- PWA: манифест даёт Chrome/Android основание показать своё нативное
+     "Установить" (событие beforeinstallprompt, ловим в app.js) — без него
+     событие просто не наступит, сколько ни жди. Safari на iOS манифест и
+     это событие не поддерживает вовсе, там только ручная инструкция через
+     "Поделиться" (см. installIosModal в разметке ниже и app.js). -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ИП Воронин">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
@@ -736,6 +746,24 @@
   .notice-box h3{font-size:17px;margin-bottom:8px;}
   .notice-box p{font-size:13.5px;color:var(--text-dim);line-height:1.5;margin-bottom:20px;}
 
+  /* Шаги установки — список читается лучше по левому краю, в отличие от
+     остального содержимого .notice-box (там текст по центру короткий и
+     единичный, тут — нумерованная последовательность действий). */
+  .install-steps{
+    text-align:left;list-style:none;counter-reset:install-step;
+    margin:0 0 20px;display:flex;flex-direction:column;gap:14px;
+  }
+  .install-steps li{
+    display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--text-dim);line-height:1.4;
+    counter-increment:install-step;
+  }
+  .install-steps li::before{
+    content:counter(install-step);flex:none;
+    width:22px;height:22px;border-radius:50%;background:rgba(201,162,75,.12);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  }
+  .install-step-icon{flex:none;color:var(--accent);display:flex;}
+
   /* Исходники фото — 500×500px. Ограничиваем увеличение примерно этим размером
      (плюс небольшой запас), иначе на весь экран (90vw/90vh) картинка растягивается
      в 3-4 раза и становится заметно размытой — крупнее исходного разрешения не сделать. */
@@ -1286,6 +1314,9 @@
     <a href="#contacts">Контакты</a>
   </div>
   <div class="nav-actions">
+    <button class="icon-btn" id="installAppBtn" aria-label="Установить приложение" title="Установить приложение" style="display:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 21h16"/></svg>
+    </button>
     <div class="account-wrap">
       <button class="icon-btn" id="accountBtn" aria-label="Аккаунт" title="Войти">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1612,6 +1643,23 @@
     <h3 id="noticeTitle"></h3>
     <p id="noticeText"></p>
     <button class="primary-btn" id="noticeOkBtn" type="button">Понятно</button>
+  </div>
+</div>
+
+<!-- Safari на iOS не поддерживает beforeinstallprompt (нативное "Установить" от
+     Chrome/Android там в принципе недоступно) — единственный путь добавить сайт
+     на экран "Домой" как приложение — это ручные шаги через "Поделиться",
+     сюда их и выводим. См. installAppBtn/initInstallPrompt в app.js. -->
+<div class="modal-overlay" id="installIosOverlay" role="dialog" aria-modal="true" aria-labelledby="installIosTitle">
+  <div class="modal-box notice-box">
+    <button class="modal-close" id="installIosClose" aria-label="Закрыть">&times;</button>
+    <h3 id="installIosTitle">Установка на iPhone</h3>
+    <ol class="install-steps">
+      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m8 8 4-4 4 4"/><rect x="4" y="14" width="16" height="7" rx="1.5"/></svg></span>Нажмите «Поделиться» в строке браузера</li>
+      <li>Выберите «На экран «Домой»»</li>
+      <li>Нажмите «Добавить» в правом верхнем углу</li>
+    </ol>
+    <button class="primary-btn" id="installIosOkBtn" type="button">Понятно</button>
   </div>
 </div>
 

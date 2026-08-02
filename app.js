@@ -1501,6 +1501,70 @@
   document.getElementById("noticeOkBtn").addEventListener("click", () => noticeOverlay.classList.remove("show"));
   noticeOverlay.addEventListener("click", (e) => { if(e.target === noticeOverlay) noticeOverlay.classList.remove("show"); });
 
+  // ===== УСТАНОВКА КАК ПРИЛОЖЕНИЕ (PWA) =====
+  // Service worker регистрируем даже без самой кнопки: Chrome/Android не пришлют
+  // beforeinstallprompt (а значит кнопка никогда не появится) без установленного
+  // service worker — это одно из условий "installability", не декорация.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Не критично — сайт прекрасно работает и без него, просто не
+        // предложит установку в Chrome/Android. Тихо игнорируем.
+      });
+    });
+  }
+
+  (function initInstallPrompt(){
+    const btn = document.getElementById("installAppBtn");
+    if (!btn) return;
+
+    // Уже открыт как установленное приложение (standalone) — предлагать
+    // установку ещё раз незачем. navigator.standalone — старое iOS-поле,
+    // display-mode — стандартный способ для всех остальных.
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    if (isStandalone) return;
+
+    // User-Agent для определения iOS — обычно решение так себе (легко подделать,
+    // легко устареет), но тут это не защита, а просто "какую инструкцию
+    // показать" — худший случай ошибки: кто-то увидит не тот текст, не более.
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+    let deferredPrompt = null;
+    // Chrome/Edge/Android сами решают, когда именно прислать это событие
+    // (обычно не сразу, а после какого-то вовлечения пользователя) — до этого
+    // момента кнопки просто не видно, тут её нечем было бы наполнить.
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btn.style.display = "";
+    });
+
+    // iOS такого события никогда не пришлёт (Safari beforeinstallprompt не
+    // поддерживает) — кнопку показываем сразу, клик открывает инструкцию
+    // вместо системного диалога, потому что системного диалога тут не будет.
+    if (isIOS) btn.style.display = "";
+
+    const installIosOverlay = document.getElementById("installIosOverlay");
+    btn.addEventListener("click", async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (choice.outcome === "accepted") btn.style.display = "none";
+        return;
+      }
+      if (isIOS && installIosOverlay) installIosOverlay.classList.add("show");
+    });
+
+    window.addEventListener("appinstalled", () => { btn.style.display = "none"; });
+
+    if (installIosOverlay) {
+      document.getElementById("installIosClose").addEventListener("click", () => installIosOverlay.classList.remove("show"));
+      document.getElementById("installIosOkBtn").addEventListener("click", () => installIosOverlay.classList.remove("show"));
+      installIosOverlay.addEventListener("click", (e) => { if (e.target === installIosOverlay) installIosOverlay.classList.remove("show"); });
+    }
+  })();
+
   // ===== УВЕЛИЧЕННОЕ ФОТО =====
   const lightboxOverlay = document.getElementById("lightboxOverlay");
   // Раньше img.src менялся сразу — но это не очищает то, что уже нарисовано в
