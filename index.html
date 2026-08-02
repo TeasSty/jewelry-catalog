@@ -2,6 +2,18 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<!-- Инлайн и ДО тега CSP (см. ниже) нарочно: у CSP-политики через <meta> есть
+     особенность — она действует только на то, что идёт в документе ПОСЛЕ неё,
+     значит для контента до неё (это первые строки <head>, целиком статичные,
+     под нашим контролем, не из каталога/БД) правило script-src 'self' без
+     unsafe-inline ещё не действует. Внешний файл (пробовали раньше — остался
+     как scroll-restore.js, см. его) не годится именно для reload/Ctrl+Shift+R:
+     ему нужен поход в сеть за файлом, а это уже позже, чем браузер успевает
+     решить, восстанавливать ли скролл для этой записи истории. Инлайн выполняется
+     тем же тактом парсера, без этой задержки — единственный способ гарантированно
+     успеть до восстановления именно при reload (для обычного перехода по ссылке
+     хватало и внешнего файла — там просто нечего восстанавливать, новая запись). -->
+<script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <!-- Content-Security-Policy: белый список того, откуда странице разрешено брать код,
@@ -551,7 +563,15 @@
   }
   .card{
     background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;overflow:hidden;
-    transition:border-color .28s, box-shadow .28s;
+    /* opacity/transform здесь дублируют .reveal ниже (та же длительность и кривая) —
+       не декоративное совпадение, а намеренная защита от каскада: transition — не
+       аддитивное свойство, при равной специфичности выигрывает целиком то правило,
+       что идёт в файле позже, вне зависимости от того, что "логичнее". Раньше
+       .card-set-pair (объявлен ниже .reveal) как раз так и перебивал transition
+       .reveal целиком — карточки "Гарнитуры" появлялись рывком, без анимации.
+       Держим полный список transition на каждом правиле карточки, чтобы порядок
+       в файле больше не решал, какая анимация останется. */
+    transition:border-color .28s, box-shadow .28s, opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1);
   }
   /* box-shadow вместо transform на самой .card: transform на предке превращает его
      в "контейнер" для потомков с position:fixed (у нас это .size-picker-grid — попап
@@ -811,7 +831,11 @@
     background:linear-gradient(160deg, rgba(201,162,75,.09), var(--bg-raised-2) 55%);
     border:1px solid var(--accent-dim);
     border-radius:10px;padding:12px;
-    transition:border-color .28s, box-shadow .28s;
+    /* Полный список, не только border-color/box-shadow — см. комментарий у .card
+       выше: это и есть причина, по которой "Гарнитуры" появлялись без анимации —
+       это правило (позже .reveal в файле) при равной специфичности класса
+       перебивало transition .reveal целиком, а не дополняло его. */
+    transition:border-color .28s, box-shadow .28s, opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1);
   }
   .card-set-pair:hover{border-color:var(--accent);box-shadow:0 10px 28px rgba(201,162,75,.16);}
   /* Shimmer по золотой рамке комплекта — диагональный блик пробегает один раз

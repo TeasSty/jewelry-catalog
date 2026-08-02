@@ -295,8 +295,7 @@
             el.classList.add("active");
             
             document.getElementById("activeCatName").textContent = targetCategoryData.name;
-            renderGrid();
-            scrollToCatalogTop();
+            scrollThenRenderGrid();
           } else {
             el.classList.remove("open");
           }
@@ -312,8 +311,7 @@
           el.classList.add("active");
 
           document.getElementById("activeCatName").textContent = targetCategoryData.name;
-          renderGrid();
-          scrollToCatalogTop();
+          scrollThenRenderGrid();
           closeSidebarMobile();
         }
       });
@@ -336,9 +334,8 @@
 
             const subCleanText = subBtn.textContent.trim().split(' (')[0];
             document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
-            
-            renderGrid();
-            scrollToCatalogTop();
+
+            scrollThenRenderGrid();
             closeSidebarMobile();
           });
         });
@@ -363,8 +360,7 @@
           const subCleanText = singleSubBtn.textContent.trim().split(" (")[0];
           document.getElementById("activeCatName").textContent = `${targetCategoryData.name} → ${subCleanText}`;
 
-          renderGrid();
-          scrollToCatalogTop();
+          scrollThenRenderGrid();
           closeSidebarMobile();
         });
       }
@@ -417,11 +413,22 @@
     });
   }
 
-  // При смене категории список мог быть проскроллен вниз — возвращаем к началу каталога,
-  // иначе новая категория открывается "с середины". При смене одной страницы (пагинация)
-  // это делает сам обработчик пагинации отдельно.
-  function scrollToCatalogTop(){
-    document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
+  // При смене категории/страницы список мог быть проскроллен вниз — возвращаем
+  // к началу каталога, иначе новая страница открывается "с середины".
+  //
+  // Порядок здесь принципиален, а не косметика. Раньше везде было наоборот:
+  // renderGrid() вызывался ДО scrollIntoView({behavior:"smooth"}). Из-за этого
+  // новые карточки попадали в DOM (и IntersectionObserver in revealGridCards()
+  // тут же засекал их как видимые — старая позиция скролла ещё не сменилась)
+  // раньше, чем страница успевала доехать наверх: пользователь видел одновременно
+  // и smooth-скролл, и уже играющую анимацию появления карточек — вот тот самый
+  // "рывок" при пагинации. Фикс не в тайминге анимации, а в самом порядке
+  // действий: сначала МГНОВЕННО (behavior:"auto") встать в положение "верх
+  // каталога", и только потом отрисовать сетку — тогда reveal стартует уже
+  // после того, как страница на месте, а не во время её движения.
+  function scrollThenRenderGrid(){
+    document.getElementById("catalog").scrollIntoView({behavior:"auto", block:"start"});
+    renderGrid();
   }
 
   // 1 товар / 2 товара / 5 товаров — раньше было только "товар" и "товаров",
@@ -1019,8 +1026,7 @@
         const page = parseInt(btn.dataset.page, 10);
         if(!isNaN(page) && page >= 1 && page <= totalPages){
           currentPage = page;
-          renderGrid();
-          document.getElementById("catalog").scrollIntoView({behavior:"smooth", block:"start"});
+          scrollThenRenderGrid();
         }
       });
     });
@@ -1045,8 +1051,7 @@
       currentPage = 1;
       document.getElementById("activeCatName").textContent = "Все товары";
 
-      renderGrid();
-      scrollToCatalogTop();
+      scrollThenRenderGrid();
       closeSidebarMobile();
     });
 
@@ -1063,8 +1068,7 @@
       currentPage = 1;
       document.getElementById("activeCatName").textContent = "Новинки";
 
-      renderGrid();
-      scrollToCatalogTop();
+      scrollThenRenderGrid();
       closeSidebarMobile();
     });
 
@@ -1436,12 +1440,50 @@
 
   // ===== УВЕЛИЧЕННОЕ ФОТО =====
   const lightboxOverlay = document.getElementById("lightboxOverlay");
+  // Раньше img.src менялся сразу — но это не очищает то, что уже нарисовано в
+  // <img>: браузер продолжает показывать СТАРЫЙ кадр (фото, открытое прошлый раз),
+  // пока новый файл не декодирован, и только потом перерисовывает. Оверлей же
+  // становится видимым сразу (у него свой opacity-переход), поэтому на долю
+  // секунды было видно предыдущее фото вместо того, что открыли — не баг анимации,
+  // а порядок операций. Фикс: декодируем новую картинку ЗАРАНЕЕ, в скрытом Image(),
+  // и подставляем в видимый <img> и открываем оверлей только когда она уже готова
+  // к отрисовке — тогда браузер рисует сразу нужный кадр. Почти всегда это тот же
+  // файл, что и миниатюра в карточке, значит уже в кэше — decode() занимает
+  // миллисекунды, не новый сетевой запрос.
+  // decode() гарантирует, что байты картинки готовы, но НЕ гарантирует, что
+  // браузер уже перерисовал именно этот <img> новым содержимым в тот же такт —
+  // по спецификации присвоение .src элементу заводит новый "image request",
+  // а не мгновенную синхронную замену кадра. На практике это иногда означает,
+  // что на один кадр всё ещё виден предыдущий рисунок, даже после decode().
+  // Поэтому после img.src ждём два кадра requestAnimationFrame (первый только
+  // планирует перерисовку, второй наступает уже гарантированно после нее) и
+  // только тогда открываем оверлей — до этого момента <img> невидим
+  // (visibility:hidden у .modal-overlay), так что даже гипотетический
+  // "старый кадр" просто некому увидеть.
+  let lightboxRequestId = 0;
   function openLightbox(src, alt){
     if(!src) return;
     const img = document.getElementById("lightboxImg");
-    img.src = src;
-    img.alt = alt || "";
-    lightboxOverlay.classList.add("show");
+    const requestId = ++lightboxRequestId;
+    const preload = new Image();
+    preload.src = src;
+    const show = () => {
+      if (requestId !== lightboxRequestId) return; // успели открыть другое фото — это устарело
+      img.src = src;
+      img.alt = alt || "";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (requestId !== lightboxRequestId) return;
+          lightboxOverlay.classList.add("show");
+        });
+      });
+    };
+    if (typeof preload.decode === "function") {
+      preload.decode().then(show).catch(show);
+    } else {
+      preload.onload = show;
+      preload.onerror = show;
+    }
   }
   document.getElementById("lightboxClose").addEventListener("click", () => lightboxOverlay.classList.remove("show"));
   lightboxOverlay.addEventListener("click", (e) => { if(e.target === lightboxOverlay) lightboxOverlay.classList.remove("show"); });
