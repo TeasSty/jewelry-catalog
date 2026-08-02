@@ -258,18 +258,24 @@
     transition:transform .6s ease-out;
   }
   @keyframes aurora-appear{to{opacity:1;}}
+  /* Раньше мягкость блобов давал filter:blur(70px) поверх radial-gradient — то есть
+     блюр по факту размывал уже мягкий край, который и так гаснет в прозрачность.
+     На среднем Android filter:blur — один из самых дорогих CSS-эффектов (полноэкранный
+     блюр-проход на каждый кадр анимации), а разница на глаз с чистым градиентом,
+     у которого стопы растянуты до 100%, минимальна. Убрали фильтр целиком, не только
+     на мобильных — эффект тот же, цена в разы меньше везде. */
   .hero-aurora .blob{
-    position:absolute;border-radius:50%;filter:blur(70px);opacity:.3;
+    position:absolute;border-radius:50%;opacity:.3;
     mix-blend-mode:screen;animation:aurora-drift 36s ease-in-out infinite;
     will-change:transform;
   }
   .hero-aurora .b1{
     width:60vw;height:60vw;max-width:640px;max-height:640px;top:-18%;left:-10%;
-    background:radial-gradient(circle, rgba(201,162,75,.3), transparent 70%);
+    background:radial-gradient(circle, rgba(201,162,75,.3), rgba(201,162,75,.06) 55%, transparent 100%);
   }
   .hero-aurora .b2{
     width:50vw;height:50vw;max-width:540px;max-height:540px;bottom:-22%;right:-8%;
-    background:radial-gradient(circle, rgba(201,162,75,.18), transparent 70%);
+    background:radial-gradient(circle, rgba(201,162,75,.18), rgba(201,162,75,.04) 55%, transparent 100%);
     animation-duration:42s;animation-delay:-10s;
   }
   @keyframes aurora-drift{
@@ -323,7 +329,11 @@
      обнаружил это при проверке, а не предположил. */
   .hero-grain{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:.035;mix-blend-mode:overlay;}
 
+  /* Чистая типография без фото — по отзыву варианты с картинкой (одиночное фото
+     в рамке, потом плавающая композиция из трёх украшений) не понравились.
+     Вернули изначальный, самый первый вариант: одна центрированная колонка. */
   .hero-inner{position:relative;z-index:1;max-width:760px;padding-bottom:140px;}
+
 
   .hero .eyebrow{
     display:inline-flex;align-items:center;gap:8px;
@@ -1129,6 +1139,33 @@
     .card-weight{font-size:13.5px;}
     .toolbar{gap:10px;}
     .search-wrap{min-width:0;}
+  }
+
+  /* ===== Мобильная/слабая техника: сводный блок оптимизации =====
+     (max-width:760px) ловит подавляющее большинство телефонов по ширине вьюпорта,
+     (pointer:coarse) добавляет любое touch-устройство независимо от ширины (крупные
+     Android-планшеты и т.п.) — то есть именно "нет настоящей мыши", а не просто
+     "узкий экран". Три вещи под подозрением у среднего Android: постоянные фоновые
+     анимации (перерасчёт/композиция каждый кадр, бесконечно, даже когда никто не
+     смотрит), огромный слой facet (140vmax — далеко за пределами экрана, но браузер
+     всё равно обязан его закомпоновать) и SVG feTurbulence-фильтр (дорогая растеризация
+     на статичном, почти невидимом эффекте — 3.5% непрозрачности). Убираем все три:
+     разница на глаз на телефоне, где эти детали и так едва заметны на маленьком
+     экране, — исчезающе мала, а кадров в секунду это освобождает заметно больше,
+     чем один только Aurora-блюр, который уже убрали выше для всех размеров экрана.
+     Сам факт появления Hero (word-in/fade-up/visual-in) не трогаем — это разовые
+     переходы при загрузке, не постоянная нагрузка, дешёвые в любом случае. */
+  @media (max-width:760px), (pointer:coarse){
+    .hero-facet{display:none;}
+    .hero-grain{display:none;}
+    .hero-aurora .blob{animation:none;will-change:auto;}
+    .hero-btn{animation:none;}
+    /* Шапка фиксирована и остаётся на экране весь скролл — значит backdrop-filter
+       на ней не разовая цена, а пересчёт фона под собой на каждый кадр скролла,
+       всё то время, что страница длинная. Фон и так почти непрозрачен (.92/.96),
+       поднимаем ещё немного, чтобы отказ от блюра не читался как "просвечивает". */
+    .nav{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(20,20,20,.97);}
+    .nav.scrolled{background:rgba(18,18,18,.98);}
   }
 
   /* ===== prefers-reduced-motion: сводный блок =====
