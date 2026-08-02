@@ -1124,14 +1124,41 @@
       renderGrid();
     });
 
-    // Сортировка — как смена категории: список меняется целиком, значит и
-    // страница, и позиция скролла должны вернуться к началу (scrollThenRenderGrid,
-    // не renderGrid()+scroll по отдельности — см. её комментарий, почему порядок
-    // важен).
-    document.getElementById("sortSelect").addEventListener("change", (e) => {
-      sortOrder = e.target.value;
-      currentPage = 1;
-      scrollThenRenderGrid();
+    // Сортировка — свой дропдаун, не <select> (см. комментарий в index.html —
+    // открытый список нативного <select> на Android рисует сама ОС, наш CSS
+    // на него не действует). Тот же принцип открытия/закрытия, что и у
+    // account-menu (клик по кнопке — toggle, клик вне — закрыть).
+    const sortPicker = document.getElementById("sortPicker");
+    const sortPickerBtn = document.getElementById("sortPickerBtn");
+    sortPickerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = !sortPicker.classList.contains("open");
+      sortPicker.classList.toggle("open", willOpen);
+      sortPickerBtn.setAttribute("aria-expanded", String(willOpen));
+    });
+    sortPicker.querySelectorAll(".sort-option").forEach(opt => {
+      opt.addEventListener("click", () => {
+        sortOrder = opt.dataset.value;
+        sortPickerBtn.textContent = opt.textContent;
+        sortPicker.querySelectorAll(".sort-option").forEach(o => {
+          o.classList.toggle("active", o === opt);
+          o.setAttribute("aria-selected", String(o === opt));
+        });
+        sortPicker.classList.remove("open");
+        sortPickerBtn.setAttribute("aria-expanded", "false");
+        // Как смена категории: список меняется целиком, значит и страница, и
+        // позиция скролла должны вернуться к началу (scrollThenRenderGrid, не
+        // renderGrid()+scroll по отдельности — см. её комментарий, почему
+        // порядок важен).
+        currentPage = 1;
+        scrollThenRenderGrid();
+      });
+    });
+    document.addEventListener("click", (e) => {
+      if (sortPicker.classList.contains("open") && !e.target.closest(".sort-picker")) {
+        sortPicker.classList.remove("open");
+        sortPickerBtn.setAttribute("aria-expanded", "false");
+      }
     });
 
     // Фильтр по весу — debounce вместо мгновенного рендера на каждый ввод цифры:

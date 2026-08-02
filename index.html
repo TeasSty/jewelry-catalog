@@ -602,14 +602,35 @@
   .search-wrap svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.5;}
   .result-count{font-size:13px;color:var(--text-dim);white-space:nowrap;}
 
-  .sort-select{
+  /* Свой дропдаун вместо <select> — у нативного открытый список рисует ОС/браузер
+     (на Android это системный пикер, наш CSS туда не достаёт), здесь же и кнопка,
+     и сам список — обычная разметка, которую можно оформить под сайт целиком. */
+  .sort-picker{position:relative;}
+  .sort-picker-btn{
     background:var(--bg-raised);border:1px solid var(--line);color:var(--text);
-    padding:12px 14px;border-radius:6px;font-size:14px;outline:none;cursor:pointer;
-    -webkit-appearance:none;appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 14px center;padding-right:32px;
+    padding:12px 32px 12px 14px;border-radius:6px;font-size:14px;cursor:pointer;
+    white-space:nowrap;position:relative;
   }
-  .sort-select:focus{border-color:var(--accent-dim);}
+  .sort-picker-btn:hover{border-color:var(--accent-dim);}
+  .sort-picker-btn::after{
+    content:"";position:absolute;right:14px;top:50%;width:10px;height:6px;
+    transform:translateY(-50%);transition:transform .2s;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
+  }
+  .sort-picker.open .sort-picker-btn{border-color:var(--accent);color:var(--accent);}
+  .sort-picker.open .sort-picker-btn::after{transform:translateY(-50%) rotate(180deg);}
+  .sort-picker-menu{
+    display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:60;
+    min-width:180px;background:var(--bg-raised);border:1px solid var(--line);border-radius:8px;
+    padding:6px;box-shadow:0 10px 24px rgba(0,0,0,.45);flex-direction:column;gap:2px;
+  }
+  .sort-picker.open .sort-picker-menu{display:flex;}
+  .sort-option{
+    background:none;border:none;color:var(--text);text-align:left;
+    padding:9px 10px;border-radius:5px;font-size:13.5px;cursor:pointer;
+  }
+  .sort-option:hover{background:var(--bg-raised-2);}
+  .sort-option.active{color:var(--accent);font-weight:600;background:rgba(201,162,75,.08);}
 
   .breadcrumb{font-size:13px;color:var(--text-dim);margin-bottom:18px;}
   .breadcrumb b{color:var(--text);font-weight:600;}
@@ -1256,7 +1277,8 @@
     .card-weight{font-size:13.5px;}
     .toolbar{gap:10px;}
     .search-wrap{min-width:0;}
-    .sort-select{flex:1 1 100%;}
+    .sort-picker{flex:1 1 100%;}
+    .sort-picker-btn{width:100%;}
   }
 
   /* ===== Мобильная/слабая техника: сводный блок оптимизации =====
@@ -1420,11 +1442,19 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="searchInput" placeholder="Поиск по артикулу..." aria-label="Поиск по артикулу" autocomplete="off" readonly>
       </div>
-      <select class="sort-select" id="sortSelect" aria-label="Сортировка">
-        <option value="default">По умолчанию</option>
-        <option value="weight-asc">Сначала лёгкие</option>
-        <option value="weight-desc">Сначала тяжёлые</option>
-      </select>
+      <!-- Не нативный <select>: открытый список у него рисует сама ОС/браузер
+           (особенно заметно на Android — там это системный пикер поверх страницы,
+           наш CSS на него не действует вообще, только на закрытую кнопку). Свой
+           дропдаун — тот же приём, что уже есть в size-picker (выбор размера
+           кольца), просто список текстом, а не сеткой чисел. -->
+      <div class="sort-picker" id="sortPicker">
+        <button type="button" class="sort-picker-btn" id="sortPickerBtn" aria-haspopup="listbox" aria-expanded="false">По умолчанию</button>
+        <div class="sort-picker-menu" role="listbox">
+          <button type="button" class="sort-option active" data-value="default" role="option" aria-selected="true">По умолчанию</button>
+          <button type="button" class="sort-option" data-value="weight-asc" role="option" aria-selected="false">Сначала лёгкие</button>
+          <button type="button" class="sort-option" data-value="weight-desc" role="option" aria-selected="false">Сначала тяжёлые</button>
+        </div>
+      </div>
       <div class="result-count" id="resultCount">Загрузка...</div>
     </div>
 
