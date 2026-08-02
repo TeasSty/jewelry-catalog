@@ -133,6 +133,35 @@
     };
   }
 
+  // Число в Hero — реальный размер каталога на момент загрузки (rawItems.length),
+  // а не выдуманная константа: если товаров станет 3500 или 2000, цифра сама
+  // подстроится при следующей сборке catalog.json. Считаем от 0 плавно один раз,
+  // при первой успешной загрузке; если пользователь просит меньше анимации
+  // (prefers-reduced-motion), просто показываем итоговое число сразу.
+  function animateHeroCount(target) {
+    const el = document.getElementById("heroItemCount");
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.textContent = target;
+      return;
+    }
+    const duration = 900;
+    const start = performance.now();
+    function tick(now) {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    // Страховка: если страница открыта в фоновой вкладке, requestAnimationFrame
+    // браузер может придержать до её активации — цифра тогда так и осталась бы
+    // на "0" неопределённо долго. setTimeout не привязан к отрисовке кадров и
+    // сработает в любом случае; если rAF к этому моменту уже показал верное
+    // число, эта строка просто перезапишет его тем же значением.
+    setTimeout(() => { el.textContent = target; }, duration + 300);
+  }
+
   // Каталог ~3000 товаров читаем из статического catalog.json (лежит рядом с сайтом),
   // а не напрямую из Firestore — иначе каждый заход посетителя это ~3000 чтений базы,
   // и на бесплатном тарифе (Blaze недоступен из РФ — Google Cloud Billing не работает
@@ -159,6 +188,7 @@
       rawItems = loadedProducts;
       loadingState.style.display = "none";
       initCatalogInterface();
+      animateHeroCount(rawItems.length);
 
     } catch (error) {
       console.error("Не удалось загрузить каталог: ", error);
@@ -443,6 +473,97 @@
     grid.innerHTML = pageItems.map(item => item.isSet ? renderSetCard(item) : renderProductCard(item)).join("");
 
     renderPagination(totalPages);
+    revealGridCards();
+    initCardImageShimmer();
+    optimizeGridColumns();
+  }
+
+  // ===== Число колонок сетки — на 1 меньше, если так ряды заполняются ровно =====
+  // В отличие от прошлой попытки (растягивать отдельные карточки — выглядело
+  // криво, карточки становились разного размера в одном ряду) здесь все карточки
+  // остаются одинаковыми: просто пробуем сетку из columns-1 колонок и смотрим,
+  // делится ли на неё общее число товаров без остатка. Если нет — не гонимся
+  // дальше (columns-2, columns-3...), просто оставляем как есть.
+  // Гарнитуры (grid-column:span 2) не трогаем — там своя раскладка.
+  function optimizeGridColumns(){
+    const grid = document.getElementById("productGrid");
+    const items = [...grid.children];
+    grid.style.gridTemplateColumns = ""; // сброс к обычному CSS-правилу (auto-fill/minmax)
+    if (items.length === 0) return;
+    if (items.some(el => el.classList.contains("card-set-pair"))) return;
+
+    const naturalColumns = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+    if (naturalColumns <= 1 || items.length % naturalColumns === 0) return; // и так ровно
+
+    const reducedColumns = naturalColumns - 1;
+    // >=2, а не >=1: сжать до одной колонки во всю ширину ради одной пустой
+    // клетки — это худший размен, чем сама пустота (см. предыдущий откат).
+    if (reducedColumns >= 2 && items.length % reducedColumns === 0) {
+      grid.style.gridTemplateColumns = `repeat(${reducedColumns}, 1fr)`;
+    }
+  }
+
+  // Число колонок зависит от ширины экрана — пересчитываем и при изменении
+  // размера окна, не только при смене страницы/фильтра.
+  let gridColumnsResizeTicking = false;
+  window.addEventListener("resize", () => {
+    if (!gridColumnsResizeTicking) {
+      requestAnimationFrame(() => { optimizeGridColumns(); gridColumnsResizeTicking = false; });
+      gridColumnsResizeTicking = true;
+    }
+  }, { passive: true });
+
+  // ===== Заглушка-shimmer на месте фото товара, пока оно грузится =====
+  // img.complete проверяем сразу: для кэшированных фото событие load могло
+  // случиться раньше, чем этот код вообще успел навесить слушатель, и без
+  // проверки shimmer завис бы навсегда на уже загруженной картинке.
+  function initCardImageShimmer(){
+    document.querySelectorAll("#productGrid .card-img img").forEach(img => {
+      const markLoaded = () => {
+        img.classList.add("loaded");
+        img.closest(".card-img")?.classList.add("img-loaded");
+      };
+      if (img.complete) { markLoaded(); return; }
+      img.addEventListener("load", markLoaded, { once: true });
+      img.addEventListener("error", markLoaded, { once: true });
+    });
+  }
+
+  // ===== Плавное появление карточек при скролле =====
+  // Наблюдаем НАПРЯМУЮ ПОТОМКОВ #productGrid (grid.children) — это ровно те элементы,
+  // что реально стоят в сетке (обычная .card или рамка .card-set-pair целиком), а не
+  // отдельные изделия ВНУТРИ комплекта: те получили бы reveal дважды — от рамки и от
+  // самих себя, — и на анимации это было бы заметно как дублирующийся, дёрганый эффект.
+  // Наблюдатель пересоздаётся при каждой отрисовке страницы (смена фильтра/страницы
+  // пагинации даёт новые DOM-элементы — старый наблюдатель их просто не увидит).
+  let gridRevealObserver = null;
+  function revealGridCards(){
+    const grid = document.getElementById("productGrid");
+    if(gridRevealObserver) gridRevealObserver.disconnect();
+
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      [...grid.children].forEach(el => el.classList.add("in-view"));
+      return;
+    }
+
+    gridRevealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if(entry.isIntersecting){
+          entry.target.classList.add("in-view");
+          gridRevealObserver.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -40px 0px", threshold: 0.05 });
+
+    [...grid.children].forEach((el, i) => {
+      el.classList.add("reveal");
+      // Первый экран карточек (обычно первый ряд) уже виден при заходе на страницу —
+      // без задержки они выглядели бы как "внезапно появились одновременно" рывком.
+      // Небольшой каскад по индексу (максимум 6 карточек вперёд) даёт то же ощущение
+      // построчного появления, что и в остальных новых блоках сайта.
+      el.style.transitionDelay = (Math.min(i, 6) * 45) + "ms";
+      gridRevealObserver.observe(el);
+    });
   }
 
   function renderProductCard(item){
@@ -458,7 +579,7 @@
         <div class="card-body">
           <div class="card-sku">${escapeHtml(item.sku)}</div>
           <div class="card-bottom-row">
-            <div class="card-weight">${escapeHtml(item.weight)} гр.</div>
+            <div class="card-weight">${escapeHtml(item.weight)}<span class="unit"> гр.</span></div>
             <div class="card-control" data-sku="${escapeHtml(item.sku)}">${cartControlHtml(item)}</div>
           </div>
         </div>
@@ -645,6 +766,149 @@
   window.addEventListener("scroll", () => {
     document.querySelectorAll(".size-picker.open").forEach(p => p.classList.remove("open"));
   }, { capture: true, passive: true });
+
+  // Шапка компактнее после первых 40px скролла + тонкая золотая полоса прогресса
+  // чтения страницы сверху. rAF-троттлинг — scroll стреляет чаще, чем нужно менять DOM.
+  const mainNav = document.getElementById("mainNav");
+  const navProgressEl = document.getElementById("navProgress");
+  let navScrollTicking = false;
+  function updateNavOnScroll(){
+    const y = window.scrollY || document.documentElement.scrollTop;
+    mainNav.classList.toggle("scrolled", y > 40);
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    navProgressEl.style.width = scrollable > 0 ? Math.min(100, (y / scrollable) * 100) + "%" : "0%";
+    navScrollTicking = false;
+  }
+  window.addEventListener("scroll", () => {
+    if(!navScrollTicking){
+      requestAnimationFrame(updateNavOnScroll);
+      navScrollTicking = true;
+    }
+  }, { passive:true });
+  updateNavOnScroll();
+
+  // ===== Ripple на кнопках-действиях =====
+  // Один делегированный обработчик на все перечисленные классы вместо того, чтобы
+  // вешать свой на каждую кнопку по отдельности — новые кнопки (например, в новых
+  // секциях) подхватываются сами, ничего дополнительно подключать не нужно.
+  // Только визуальный эффект: click не перехватывается (нет preventDefault/
+  // stopPropagation), поэтому реальные обработчики кнопок продолжают работать как раньше.
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  document.addEventListener("click", (e) => {
+    if (reduceMotion.matches) return;
+    const btn = e.target.closest(".primary-btn, .add-cart-btn, .add-set-btn, .hero-btn");
+    if (!btn || btn.disabled) return;
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.4;
+    const span = document.createElement("span");
+    span.className = "ripple";
+    span.style.width = span.style.height = size + "px";
+    span.style.left = (e.clientX - rect.left - size / 2) + "px";
+    span.style.top = (e.clientY - rect.top - size / 2) + "px";
+    btn.appendChild(span);
+    span.addEventListener("animationend", () => span.remove(), { once: true });
+  });
+
+  // ===== "Наверх" в футере =====
+  document.getElementById("backToTop").addEventListener("click", (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
+  });
+
+  // ===== Появление новых витринных секций при скролле =====
+  // Те же классы .reveal/.in-view, что и у карточек товара (см. revealGridCards) —
+  // единая система, а не вторая копия той же логики. Настраивается один раз при
+  // загрузке: это статичная разметка, в отличие от сетки товаров она не перерисовывается.
+  (function initStaticReveals(){
+    const targets = document.querySelectorAll(".advantage-card, .process-steps > li, .cta-inner");
+    if (targets.length === 0) return;
+    if (reduceMotion.matches) {
+      targets.forEach(el => el.classList.add("in-view"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in-view");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -60px 0px", threshold: 0.08 });
+    targets.forEach((el, i) => {
+      el.classList.add("reveal");
+      el.style.transitionDelay = (Math.min(i % 4, 3) * 70) + "ms";
+      observer.observe(el);
+    });
+  })();
+
+  // ===== Лёгкий параллакс Aurora-фона Hero от мыши =====
+  // Только там, где есть настоящая мышь (hover:hover исключает тач-экраны, где
+  // mousemove либо не стреляет вовсе, либо стреляет один раз после тапа —
+  // не тот эффект, который нужен) и только когда не отключены анимации.
+  // Сдвиг мал (±10px) — это подсказка глубины, а не заметный эффект сам по себе.
+  (function initHeroParallax(){
+    const hero = document.querySelector(".hero");
+    const aurora = document.getElementById("heroAurora");
+    if (!hero || !aurora) return;
+    if (reduceMotion.matches || !window.matchMedia("(hover: hover)").matches) return;
+
+    hero.addEventListener("mousemove", (e) => {
+      const rect = hero.getBoundingClientRect();
+      const px = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+      const py = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+      aurora.style.transform = `translate(${px * 10}px, ${py * 10}px)`;
+    });
+    hero.addEventListener("mouseleave", () => { aurora.style.transform = ""; });
+  })();
+
+  // ===== Небольшой докат по инерции после остановки колеса =====
+  // Обе предыдущие версии перехватывали сам скролл (preventDefault) и вели его
+  // сами — из-за этого он либо тянулся вязко, либо просто ощущался "не своим".
+  // Здесь по-другому: сам скролл во время движения колеса остаётся ПОЛНОСТЬЮ
+  // нативным (passive:true, preventDefault не вызывается вообще — "как будто
+  // я скролю" в чистом виде). Единственное добавление — короткий, маленький
+  // докат ПОСЛЕ того, как колесо перестало крутиться (100мс без новых wheel-
+  // событий), похожий на инерцию тачпада: несколько кадров быстро затухающего
+  // scrollBy, максимум ~50-60px, а не отдельная "поездка".
+  //
+  // Сайдбар/корзина/модалки (своя прокрутка через overflow) исключены явно.
+  // При reduce-motion не включается вовсе.
+  (function initScrollMomentumTail(){
+    if (reduceMotion.matches) return;
+    const noInterceptSelector = ".sidebar, .cart-panel-body, .modal-box";
+    let lastDeltaY = 0;
+    let idleTimer = null;
+    let coastId = null;
+
+    function stopCoast(){
+      if (coastId) { cancelAnimationFrame(coastId); coastId = null; }
+    }
+
+    function startCoast(){
+      const sign = lastDeltaY > 0 ? 1 : -1;
+      // Старт всегда небольшой и почти не зависит от силы прокрутки — это
+      // именно "довесок", а не продолжение того же движения в том же масштабе.
+      let v = sign * Math.min(15, Math.abs(lastDeltaY) * 0.15);
+      let steps = 0;
+      function tick(){
+        if (Math.abs(v) < 0.3 || steps++ > 12) { coastId = null; return; }
+        window.scrollBy(0, v);
+        v *= 0.75;
+        coastId = requestAnimationFrame(tick);
+      }
+      coastId = requestAnimationFrame(tick);
+    }
+
+    window.addEventListener("wheel", (e) => {
+      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (e.target.closest(noInterceptSelector)) return;
+      // preventDefault нет намеренно — сам скролл нативный от начала до конца
+      stopCoast();
+      lastDeltaY = e.deltaY;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(startCoast, 100);
+    }, { passive: true });
+  })();
 
   document.getElementById("productGrid").addEventListener("click", (e) => {
     // Пикер размера в карточке каталога — выбирается ДО добавления в корзину, а не только
