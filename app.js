@@ -566,6 +566,22 @@
     });
   }
 
+  // AVIF/WebP лежат рядом с оригиналом под тем же именем (scripts/enhance-all.mjs
+  // прогнал весь images/ разом, проверил — на все 2978 файлов есть оба варианта,
+  // без исключений) — только для локальных images/itemsNNN.jpg, у внешних (ImgBB
+  // и т.п.) вариантов нет и не будет, для них картинка остаётся как есть, без
+  // <picture>. Раньше уже ловил баг именно тут: если сослаться на .webp/.avif,
+  // которого ещё нет на диске, браузер показывает битую картинку и НЕ откатывается
+  // на <img> сам — <picture> так не работает. Поэтому это подключено только
+  // теперь, когда для каждого файла подтверждено наличие обоих вариантов.
+  function localPictureSources(imgPath){
+    const m = /^images\/(items\d+)\.jpg$/i.exec(imgPath);
+    if (!m) return "";
+    const base = m[1];
+    return `<source srcset="images/${base}.avif" type="image/avif">`
+         + `<source srcset="images/${base}.webp" type="image/webp">`;
+  }
+
   function renderProductCard(item){
     // Без loading="lazy": пагинация и так ограничивает страницу разумным числом фото
     // (20 обычных товаров, до ~40 с учётом пар "Гарнитуры" — совсем немного для
@@ -574,7 +590,10 @@
     return `
       <div class="card">
         <div class="card-img" data-img="${escapeHtml(item.img)}">
-          <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}">
+          <picture>
+            ${localPictureSources(item.img)}
+            <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}">
+          </picture>
         </div>
         <div class="card-body">
           <div class="card-sku">${escapeHtml(item.sku)}</div>
