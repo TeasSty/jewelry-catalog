@@ -1159,16 +1159,28 @@
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
 
+  // Без блокировки скролла фон страницы можно было листать прямо под открытым
+  // меню категорий (сам сайдбар прокручивается своим overflow-y отдельно) —
+  // и на бегущем под ним контенте шапка сайта успевала сжаться (.scrolled,
+  // 74px→60px, см. updateNavOnScroll), а меню оставалось привязано к прежней
+  // высоте: список категорий визуально "скакал"/съезжал при пролистывании.
+  // Блокируем сразу оба — html и body: на части мобильных браузеров overflow:hidden
+  // только на body не держит закрытие полностью (страница всё равно тянется
+  // "резинкой" по краю), на html он надёжнее.
   function openSidebarMobile(){
     sidebar.classList.add("open");
     overlay.classList.add("show");
     burgerBtn.classList.add("open");
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
   }
   function closeSidebarMobile(){
     if(window.innerWidth > 900) return;
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
     burgerBtn.classList.remove("open");
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
   }
 
   burgerBtn.addEventListener("click", () => {

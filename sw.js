@@ -42,7 +42,21 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (!SHELL_FILES.includes(url.pathname)) return; // каталог/фото/всё остальное — мимо, в обычную сеть
 
+  // Сначала сеть, кэш — только запасной вариант (офлайн/сеть недоступна), а не
+  // основной источник. Раньше было наоборот ("сначала кэш") — это ломает сам
+  // смысл обновления сайта: посетитель с уже установленным приложением видел
+  // бы версию оболочки на момент первой установки СКОЛЬКО УГОДНО ДОЛГО, пока
+  // байты sw.js не поменяются (единственное, что вообще заставляет браузер
+  // переустановить SW и завести кэш заново) — а это, в отличие от index.html/
+  // app.js, меняется не при каждом деплое. Каждый успешный сетевой ответ
+  // одновременно освежает кэш — офлайн-копия не отстаёт от реального сайта.
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

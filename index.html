@@ -1234,6 +1234,17 @@
     .overlay.show{display:block;}
     .sidebar.open{box-shadow:8px 0 24px rgba(0,0,0,.35);}
     .main{padding-bottom:48px;}
+
+    /* Шапка компактнее (74px→60px) после 40px скролла (.scrolled — см. updateNavOnScroll
+       в app.js), а сайдбар-выдвижка и оверлей были прибиты к фиксированным 74px —
+       стоило открыть меню уже после того, как страницу успели проскроллить (или
+       проскроллить, пока меню открыто — см. лок скролла body там же), и появлялась
+       щель/скачок между низом шапки и верхом списка категорий. #mainNav.scrolled ~
+       — общий сосед по DOM (nav идёт раньше .overlay и .layout, но не их прямой
+       родитель), а не JS-переменная: держит sidebar/overlay в реальной синхронизации
+       с высотой шапки, какой бы она ни была, без дублирования логики в двух местах. */
+    #mainNav.scrolled ~ .overlay{inset:60px 0 0 0;}
+    #mainNav.scrolled ~ .layout .sidebar{top:60px;}
   }
   @media (max-width:480px){
     .nav{padding:0 16px;height:68px;}
