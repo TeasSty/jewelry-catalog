@@ -95,6 +95,9 @@
   let activeSubcategory = "";
   let searchTerm = "";
   let currentPage = 1;
+  let sortOrder = "default"; // "default" | "weight-asc" | "weight-desc"
+  let weightMin = null;
+  let weightMax = null;
 
   // Приводим документ из любого источника к тому виду, с которым работает интерфейс
   // Приводит артикул к виду для нечёткого поиска: без регистра, без дефисов/пробелов/точек,
@@ -367,12 +370,45 @@
     });
   }
 
+  // Вес комплекта "Гарнитуры" — сумма всех его изделий (то же число, что уже
+  // показано на карточке как "N гр. всего"), а не вес какого-то одного из них —
+  // так фильтр/сортировка по весу остаются согласованы с тем, что видно на экране.
+  function itemWeight(item){
+    if (item.isSet) {
+      return [item.ring, item.earring, item.pendant]
+        .filter(Boolean)
+        .reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0);
+    }
+    return parseFloat(item.weight) || 0;
+  }
+
+  // Фильтр по весу — после группировки в пары "Гарнитуры" (не до): весы отдельных
+  // изделий комплекта по отдельности могли бы не уложиться в диапазон, хотя их
+  // сумма укладывается (или наоборот), а на экране комплект всегда один блок
+  // с одним суммарным весом — фильтровать нужно ровно по нему же.
+  function applyWeightFilter(items){
+    if (weightMin == null && weightMax == null) return items;
+    return items.filter(item => {
+      const w = itemWeight(item);
+      if (weightMin != null && w < weightMin) return false;
+      if (weightMax != null && w > weightMax) return false;
+      return true;
+    });
+  }
+
+  function applySortOrder(items){
+    if (sortOrder === "weight-asc") return [...items].sort((a, b) => itemWeight(a) - itemWeight(b));
+    if (sortOrder === "weight-desc") return [...items].sort((a, b) => itemWeight(b) - itemWeight(a));
+    return items; // "default" — порядок уже задан getFilteredFlat/группировкой
+  }
+
   // Применяет группировку пар "Гарнитуры" (см. groupGarnituryPairs ниже) поверх обычной
   // фильтрации — так пара выглядит парой в любом разрезе (вся категория, конкретная
   // подкатегория, поиск, "Все товары"). Вне "Гарнитуры" группировка не находит совпадений
   // и возвращает список без изменений.
   function getFiltered(){
-    return groupGarnituryPairs(getFilteredFlat());
+    const grouped = groupGarnituryPairs(getFilteredFlat());
+    return applySortOrder(applyWeightFilter(grouped));
   }
 
   function getFilteredFlat(){
@@ -1088,6 +1124,33 @@
       renderGrid();
     });
 
+    // Сортировка — как смена категории: список меняется целиком, значит и
+    // страница, и позиция скролла должны вернуться к началу (scrollThenRenderGrid,
+    // не renderGrid()+scroll по отдельности — см. её комментарий, почему порядок
+    // важен).
+    document.getElementById("sortSelect").addEventListener("change", (e) => {
+      sortOrder = e.target.value;
+      currentPage = 1;
+      scrollThenRenderGrid();
+    });
+
+    // Фильтр по весу — debounce вместо мгновенного рендера на каждый ввод цифры:
+    // печатать "150" по одной цифре не должно трижды перестраивать сетку.
+    let weightFilterTimer = null;
+    function onWeightInput(){
+      clearTimeout(weightFilterTimer);
+      weightFilterTimer = setTimeout(() => {
+        const minEl = document.getElementById("weightMin");
+        const maxEl = document.getElementById("weightMax");
+        weightMin = minEl.value !== "" ? parseFloat(minEl.value) : null;
+        weightMax = maxEl.value !== "" ? parseFloat(maxEl.value) : null;
+        currentPage = 1;
+        scrollThenRenderGrid();
+      }, 400);
+    }
+    document.getElementById("weightMin").addEventListener("input", onWeightInput);
+    document.getElementById("weightMax").addEventListener("input", onWeightInput);
+
     renderCategories();
     renderGrid();
   }
@@ -1460,30 +1523,70 @@
   // только тогда открываем оверлей — до этого момента <img> невидим
   // (visibility:hidden у .modal-overlay), так что даже гипотетический
   // "старый кадр" просто некому увидеть.
+  // Для локальных фото (images/itemsNNN.jpg) может существовать отдельная
+  // HD-версия (images/itemsNNN-hd.jpg) — тот же кадр, прогнанный через
+  // ИИ-апскейл (см. scripts/ai-upscale-batch.mjs), специально под лайтбокс:
+  // обычный файл остаётся маленьким для сетки карточек, HD грузится только
+  // здесь, только когда фото реально открывают. Обрабатывается не весь каталог
+  // разом, поэтому HD-версия есть не у всех — если её нет (404), тихо
+  // откатываемся на обычный файл, без ошибки на экране.
+  function hdVariant(src){
+    const m = /^(images\/items\d+)\.jpg$/i.exec(src);
+    return m ? `${m[1]}-hd.jpg` : null;
+  }
+
+  // decode() гарантирует готовые байты, но не факт, что браузер уже перерисовал
+  // этот <img> — resolve только после факта, а не раньше.
+  function preloadDecode(src){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = src;
+      if (typeof img.decode === "function") {
+        img.decode().then(() => resolve(img)).catch(reject);
+      } else {
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+      }
+    });
+  }
+
+  // decode() у свёрнутой/неактивной вкладки браузер может не тронуть вовсе —
+  // ни resolve, ни reject, просто бесконечно висит (нашёл при проверке). Без
+  // таймаута весь openLightbox застревал бы навсегда, и лайтбокс не открылся
+  // бы. Таймаут не про качество сети — это защита от зависания как класса.
+  function preloadDecodeWithTimeout(src, ms){
+    return Promise.race([
+      preloadDecode(src),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))
+    ]);
+  }
+
   let lightboxRequestId = 0;
-  function openLightbox(src, alt){
+  async function openLightbox(src, alt){
     if(!src) return;
     const img = document.getElementById("lightboxImg");
     const requestId = ++lightboxRequestId;
-    const preload = new Image();
-    preload.src = src;
-    const show = () => {
-      if (requestId !== lightboxRequestId) return; // успели открыть другое фото — это устарело
-      img.src = src;
-      img.alt = alt || "";
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (requestId !== lightboxRequestId) return;
-          lightboxOverlay.classList.add("show");
-        });
-      });
-    };
-    if (typeof preload.decode === "function") {
-      preload.decode().then(show).catch(show);
-    } else {
-      preload.onload = show;
-      preload.onerror = show;
+
+    const hd = hdVariant(src);
+    let finalSrc = src;
+    if (hd) {
+      try { await preloadDecodeWithTimeout(hd, 4000); finalSrc = hd; }
+      catch { /* HD ещё не сделан для этого фото (или не успел за 4с) — остаёмся на обычном src */ }
     }
+    try { await preloadDecodeWithTimeout(finalSrc, 4000); } catch { /* ниже всё равно попробуем показать */ }
+
+    if (requestId !== lightboxRequestId) return; // успели открыть другое фото — это устарело
+    img.src = finalSrc;
+    img.alt = alt || "";
+    // Присвоение .src — новый "image request" по спецификации, не гарантированно
+    // мгновенная перерисовка даже после decode(). Два кадра rAF — до реальной
+    // отрисовки, оверлей открываем только после неё (см. историю правок).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (requestId !== lightboxRequestId) return;
+        lightboxOverlay.classList.add("show");
+      });
+    });
   }
   document.getElementById("lightboxClose").addEventListener("click", () => lightboxOverlay.classList.remove("show"));
   lightboxOverlay.addEventListener("click", (e) => { if(e.target === lightboxOverlay) lightboxOverlay.classList.remove("show"); });

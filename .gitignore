@@ -13,3 +13,7 @@ serviceAccountKey.json
 .wrangler/
 
 node_modules/
+
+# Локальный инструмент для апскейла фото (exe + веса нейросети, Windows-бинарник,
+# ~45 МБ) — используется вручную из scripts/, сайту не нужен, в репозиторий не идёт.
+scripts/rvk/
