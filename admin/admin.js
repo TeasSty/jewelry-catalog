@@ -979,6 +979,15 @@
         const row = e.currentTarget.closest("tr");
         row.querySelectorAll("button").forEach(b => b.disabled = true);
         try {
+          // Окончательное удаление стирает документ товара целиком — а sync-catalog.mjs
+          // в обычном (не полном) проходе видит только документы, которые ЕЩЁ существуют
+          // и подходят под фильтр "updatedAt > последняя синхронизация". Исчезнувший
+          // документ этому фильтру в принципе не может соответствовать, поэтому без
+          // отдельной метки товар пролежал бы в catalog.json до ближайшего полного
+          // прохода (раз в сутки), хотя из панели уже пропал. Метка в deleted_skus —
+          // дешёвая замена: сама всего один маленький документ, sync-catalog.mjs читает
+          // её на каждом инкрементальном проходе и сразу вычёркивает sku из каталога.
+          await setDoc(doc(db, "deleted_skus", sku), { sku, deletedAt: serverTimestamp() });
           await deleteDoc(doc(db, "products", sku));
           trashCache = (trashCache || []).filter(it => it.sku !== sku);
           renderTrashTable();

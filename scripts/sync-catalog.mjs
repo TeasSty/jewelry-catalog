@@ -85,6 +85,43 @@ async function fetchChangedSince(isoTimestamp) {
   return rows.filter(row => row.document).map(row => parseDoc(row.document));
 }
 
+const TOMBSTONES_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/deleted_skus`;
+
+// Метки безвозвратно удалённых товаров (admin.js, окончательное удаление из Корзины).
+// Нужны только инкрементальному проходу: fetchChangedSince ниже в принципе не может
+// увидеть документ, которого больше нет, а полный проход и так не найдёт исчезнувший
+// документ в fetchAllProducts — метки ему без надобности.
+async function fetchTombstones() {
+  const items = [];
+  let pageToken;
+
+  do {
+    const url = new URL(TOMBSTONES_URL);
+    url.searchParams.set("pageSize", "300");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Firestore REST error ${res.status}: ${await res.text()}`);
+    }
+    const data = await res.json();
+    for (const doc of data.documents || []) items.push(doc.name.split("/").pop());
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return items;
+}
+
+// Метки одноразовые: раз учтённые в catalog.json, дальше они только зря увеличивали бы
+// счёт при каждом следующем инкрементальном проходе. Удаление — это запись, а не чтение,
+// в дневной лимит чтений (то, из-за чего вообще разделили полный/инкрементальный режим)
+// не упирается.
+async function deleteTombstones(skus) {
+  for (const sku of skus) {
+    await fetch(`${TOMBSTONES_URL}/${encodeURIComponent(sku)}`, { method: "DELETE" });
+  }
+}
+
 async function readExistingCatalog() {
   try {
     const fs = await import("node:fs/promises");
@@ -114,11 +151,23 @@ let items;
 // не должен. Firestore-правила чтения products нарочно не трогали (allow read: if
 // true, как и раньше — в удалённом товаре нет ничего секретного), поэтому именно
 // здесь, при сборке catalog.json, — единственное место, где это нужно отфильтровать.
+// Собранные по ходу метки удаляем из Firestore в самом конце (после успешной записи
+// catalog.json) — раз они пригодятся ещё раз, если запись файла оборвётся.
+let tombstonesToClear = [];
+
 if (forceFullSync) {
   items = (await fetchAllProducts()).filter(item => item.deleted !== true);
+  // Полный проход сам по себе уже не включает окончательно удалённые товары (их
+  // документов просто нет в fetchAllProducts) — но накопившиеся метки всё равно
+  // больше не нужны, и стоит вычистить их, чтобы коллекция deleted_skus не росла
+  // бесконечно из циклов "инкрементальный проход упал/не запускался".
+  tombstonesToClear = await fetchTombstones();
   console.log(`Полный проход. Синхронизировано товаров: ${items.length}`);
 } else {
-  const changed = await fetchChangedSince(existing.lastSyncAt);
+  const [changed, tombstoned] = await Promise.all([
+    fetchChangedSince(existing.lastSyncAt),
+    fetchTombstones()
+  ]);
   const bySku = new Map(existing.items.map(item => [item.sku || item.id, item]));
   for (const item of changed) {
     const key = item.sku || item.id;
@@ -129,11 +178,18 @@ if (forceFullSync) {
     if (item.deleted === true) bySku.delete(key);
     else bySku.set(key, item);
   }
+  // Окончательно удалённые товары: fetchChangedSince их в принципе не видит (документа
+  // уже нет), поэтому без этого шага они пролежали бы в catalog.json до ближайшего
+  // полного прохода. См. комментарий у fetchTombstones() и admin/admin.js.
+  for (const sku of tombstoned) bySku.delete(sku);
+  tombstonesToClear = tombstoned;
   items = [...bySku.values()];
-  console.log(`Инкрементальный проход. Изменено товаров: ${changed.length}, всего в каталоге: ${items.length}`);
+  console.log(`Инкрементальный проход. Изменено товаров: ${changed.length}, удалено окончательно: ${tombstoned.length}, всего в каталоге: ${items.length}`);
 }
 
 const fs = await import("node:fs/promises");
 // Без отступов — файл читает только браузер, а не человек; на ~3000 товарах
 // красивое форматирование почти удваивает вес файла, который качает каждый посетитель.
 await fs.writeFile(CATALOG_PATH, JSON.stringify({ lastSyncAt: now, items }), "utf8");
+
+if (tombstonesToClear.length) await deleteTombstones(tombstonesToClear);
