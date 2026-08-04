@@ -9,7 +9,7 @@
 // (для них уже есть свой контроль свежести — HTTP-кэш браузера и cache:"no-cache"
 // на самом fetch в app.js). Всё, что не входит в SHELL_FILES, просто не
 // перехватываем — уходит в сеть как обычно, будто SW не установлен вовсе.
-const CACHE_NAME = "voronin-shell-v3";
+const CACHE_NAME = "voronin-shell-v4";
 const SHELL_FILES = [
   "/",
   "/index.html",
