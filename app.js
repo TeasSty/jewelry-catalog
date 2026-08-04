@@ -449,21 +449,28 @@
     });
   }
 
-  // При смене категории/страницы список мог быть проскроллен вниз — возвращаем
-  // к началу каталога, иначе новая страница открывается "с середины".
-  //
-  // Порядок здесь принципиален, а не косметика. Раньше везде было наоборот:
-  // renderGrid() вызывался ДО scrollIntoView({behavior:"smooth"}). Из-за этого
-  // новые карточки попадали в DOM (и IntersectionObserver in revealGridCards()
-  // тут же засекал их как видимые — старая позиция скролла ещё не сменилась)
-  // раньше, чем страница успевала доехать наверх: пользователь видел одновременно
-  // и smooth-скролл, и уже играющую анимацию появления карточек — вот тот самый
-  // "рывок" при пагинации. Фикс не в тайминге анимации, а в самом порядке
-  // действий: сначала МГНОВЕННО (behavior:"auto") встать в положение "верх
-  // каталога", и только потом отрисовать сетку — тогда reveal стартует уже
-  // после того, как страница на месте, а не во время её движения.
+  // При смене категории/страницы сразу оказываемся у каталога — без «пролёта»
+  // через Hero. Порядок принципиален:
+  // 1) Снять лок скролла мобильного меню БЕЗ восстановления старой позиции
+  //    (раньше closeSidebarMobile() делал scrollTo(lockY) уже после перехода
+  //    к каталогу → пользователь снова оказывался на Hero и листал вниз вручную).
+  // 2) Мгновенно (behavior:"auto") встать на #catalog (scroll-margin учитывает шапку).
+  // 3) Только потом отрисовать сетку — иначе reveal играет во время движения.
   function scrollThenRenderGrid(){
-    document.getElementById("catalog").scrollIntoView({behavior:"auto", block:"start"});
+    const side = document.getElementById("sidebar");
+    const ov = document.getElementById("overlay");
+    const burger = document.getElementById("burgerBtn");
+    if (window.innerWidth <= 900 && side) {
+      side.classList.remove("open");
+      if (ov) ov.classList.remove("show");
+      if (burger) burger.classList.remove("open");
+      if (document.body.classList.contains("sidebar-open")) {
+        document.body.classList.remove("sidebar-open");
+        document.body.style.top = "";
+        // намеренно НЕ возвращаем прежний scrollY — уходим в каталог
+      }
+    }
+    document.getElementById("catalog").scrollIntoView({ behavior: "auto", block: "start" });
     renderGrid();
   }
 
@@ -1577,154 +1584,21 @@
   document.getElementById("noticeOkBtn").addEventListener("click", () => noticeOverlay.classList.remove("show"));
   noticeOverlay.addEventListener("click", (e) => { if(e.target === noticeOverlay) noticeOverlay.classList.remove("show"); });
 
-  // ===== УСТАНОВКА КАК ПРИЛОЖЕНИЕ (PWA) =====
-  // Service worker регистрируем даже без самой кнопки: Chrome/Android не пришлют
-  // beforeinstallprompt (а значит кнопка никогда не появится) без установленного
-  // service worker — это одно из условий "installability", не декорация.
+  // ===== PWA ОТКЛЮЧЁН =====
+  // Кнопка установки и связанный UI убраны: на части телефонов (Яндекс/Android)
+  // beforeinstallprompt ненадёжен, а сломанная иконка хуже, чем её отсутствие.
+  // Снимаем ранее зарегистрированный service worker и его кеши, чтобы старые
+  // установки/оболочка не перехватывали загрузку устаревшим index.html.
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Не критично — сайт прекрасно работает и без него, просто не
-        // предложит установку в Chrome/Android. Тихо игнорируем.
-      });
-    });
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.unregister());
+    }).catch(() => {});
   }
-
-  (function initInstallPrompt(){
-    const btn = document.getElementById("installAppBtn");
-    if (!btn) return;
-
-    const PWA_INSTALLED_KEY = "voronin_pwa_installed";
-    const installIosOverlay = document.getElementById("installIosOverlay");
-    const installStepsList = document.getElementById("installStepsList");
-    const installTitle = document.getElementById("installIosTitle");
-
-    const IOS_STEPS = `
-      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m8 8 4-4 4 4"/><rect x="4" y="14" width="16" height="7" rx="1.5"/></svg></span>Нажмите «Поделиться» в строке браузера</li>
-      <li>Выберите «На экран «Домой»»</li>
-      <li>Нажмите «Добавить» в правом верхнем углу</li>`;
-
-    const ANDROID_STEPS = `
-      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span>Откройте меню браузера (обычно ⋮ в углу экрана)</li>
-      <li>Найдите пункт «Установить приложение» или «Добавить на главный экран»</li>
-      <li>Подтвердите — значок появится на главном экране</li>`;
-
-    const DESKTOP_STEPS = `
-      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/></svg></span>В адресной строке браузера найдите значок установки (⊕ / монитор со стрелкой)</li>
-      <li>Или откройте меню браузера → «Установить ИП Воронин…»</li>
-      <li>Подтвердите установку</li>`;
-
-    function isStandaloneMode(){
-      return window.matchMedia("(display-mode: standalone)").matches
-        || window.matchMedia("(display-mode: fullscreen)").matches
-        || window.matchMedia("(display-mode: minimal-ui)").matches
-        || window.navigator.standalone === true;
-    }
-
-    function wasInstalledBefore(){
-      try { return localStorage.getItem(PWA_INSTALLED_KEY) === "1"; } catch { return false; }
-    }
-
-    function markInstalled(){
-      try { localStorage.setItem(PWA_INSTALLED_KEY, "1"); } catch {}
-      btn.style.display = "none";
-      clearTimeout(androidFallbackTimer);
-    }
-
-    // Уже открыт как установленное приложение или ставили раньше — кнопку не показываем.
-    if (isStandaloneMode() || wasInstalledBefore()) {
-      btn.style.display = "none";
-      return;
-    }
-
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-    const isAndroid = /android/i.test(navigator.userAgent);
-
-    let deferredPrompt = null;
-    let androidFallbackTimer = null;
-
-    function showInstallButton(){
-      if (isStandaloneMode() || wasInstalledBefore()) {
-        btn.style.display = "none";
-        return;
-      }
-      btn.style.display = "";
-    }
-
-    function showManualInstallHelp(){
-      if (!installIosOverlay) return;
-      if (installTitle && installStepsList) {
-        if (isIOS) {
-          installTitle.textContent = "Установка на iPhone";
-          installStepsList.innerHTML = IOS_STEPS;
-        } else if (isAndroid) {
-          installTitle.textContent = "Установка на Android";
-          installStepsList.innerHTML = ANDROID_STEPS;
-        } else {
-          installTitle.textContent = "Установка приложения";
-          installStepsList.innerHTML = DESKTOP_STEPS;
-        }
-      }
-      installIosOverlay.classList.add("show");
-    }
-
-    // Chrome/Edge сами решают, когда прислать beforeinstallprompt (обычно после
-    // вовлечения). До этого кнопки не видно — нечем было бы наполнить клик.
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      showInstallButton();
-      clearTimeout(androidFallbackTimer);
-    });
-
-    // iOS beforeinstallprompt не поддерживает — сразу инструкция через кнопку.
-    if (isIOS) showInstallButton();
-
-    // Яндекс.Браузер и часть Android Chromium-сборок событие не шлют или шлют
-    // ненадёжно. Если за 3с не пришло — показываем кнопку с ручной инструкцией.
-    if (isAndroid && !isIOS) {
-      androidFallbackTimer = setTimeout(() => {
-        if (!deferredPrompt) showInstallButton();
-      }, 3000);
-    }
-
-    btn.addEventListener("click", async () => {
-      if (deferredPrompt) {
-        try {
-          deferredPrompt.prompt();
-          const choice = await deferredPrompt.userChoice;
-          deferredPrompt = null;
-          if (choice.outcome === "accepted") markInstalled();
-          else btn.style.display = "none"; // отказ — не надоедаем в этой сессии
-          return;
-        } catch (err) {
-          console.warn("PWA prompt failed, falling back to manual steps:", err);
-          deferredPrompt = null;
-        }
-      }
-      // Нет системного диалога (iOS / Яндекс / prompt() упал) — показываем шаги.
-      showManualInstallHelp();
-    });
-
-    window.addEventListener("appinstalled", () => {
-      deferredPrompt = null;
-      markInstalled();
-      if (installIosOverlay) installIosOverlay.classList.remove("show");
-    });
-
-    // Смена display-mode (открыли уже установленное) — прячем кнопку на лету.
-    try {
-      window.matchMedia("(display-mode: standalone)").addEventListener("change", (e) => {
-        if (e.matches) markInstalled();
-      });
-    } catch {}
-
-    if (installIosOverlay) {
-      document.getElementById("installIosClose").addEventListener("click", () => installIosOverlay.classList.remove("show"));
-      document.getElementById("installIosOkBtn").addEventListener("click", () => installIosOverlay.classList.remove("show"));
-      installIosOverlay.addEventListener("click", (e) => { if (e.target === installIosOverlay) installIosOverlay.classList.remove("show"); });
-    }
-  })();
+  if (typeof caches !== "undefined" && caches.keys) {
+    caches.keys().then((keys) => {
+      keys.filter((k) => k.startsWith("voronin-shell")).forEach((k) => caches.delete(k));
+    }).catch(() => {});
+  }
 
   // ===== УВЕЛИЧЕННОЕ ФОТО =====
   const lightboxOverlay = document.getElementById("lightboxOverlay");
