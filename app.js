@@ -695,8 +695,8 @@
   }
 
   // Пара (кольцо+серьги) или тройка (+ подвеска) из "Гарнитуры".
-  // Размер миниатюр задаёт CSS: каждая ячейка ровно 1/3 ширины рамки
-  // (flex-basis), независимо от числа изделий — пара не растягивается.
+  // Раскладку задаёт CSS по data-count: 2 → две равные колонки, 3 → три
+  // (без пустой ячейки у пары). Фото на белом студийном фоне.
   //
   // Основной сценарий — покупка комплекта целиком: одна кнопка кладёт в корзину все его
   // изделия разом. Отдельные кнопки у каждого изделия никуда не делись, но убраны под
@@ -715,12 +715,12 @@
     const totalWeight = pieces.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0);
 
     return `
-      <div class="card-set-pair" data-set-ring="${setKey}">
+      <div class="card-set-pair" data-set-ring="${setKey}" data-count="${pieces.length}">
         <div class="card-set-head">
           <span class="card-set-label">Комплект</span>
           ${totalWeight ? `<span class="card-set-weight">${totalWeight.toFixed(2)} гр. всего</span>` : ""}
         </div>
-        <div class="card-set-items">
+        <div class="card-set-items" data-count="${pieces.length}">
           ${pieces.map(renderProductCard).join("")}
         </div>
         <div class="card-set-actions">
