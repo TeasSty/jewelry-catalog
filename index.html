@@ -14,7 +14,7 @@
      успеть до восстановления именно при reload (для обычного перехода по ссылке
      хватало и внешнего файла — там просто нечего восстанавливать, новая запись). -->
 <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <!-- Content-Security-Policy: белый список того, откуда странице разрешено брать код,
      стили, шрифты, картинки и куда ходить по сети. Смысл — если в каталог когда-нибудь
@@ -144,18 +144,25 @@
      Плавно уменьшается при скролле (класс .nav.scrolled, вешает app.js) — частый
      премиальный приём: шапка компактнее, когда не мешает первому экрану, но не
      ужимает высоту резко и не дёргает раскладку логотипа. */
+  /* --nav-height — логическая высота шапки без safe-area (74 / 68 / 60).
+     Реальная занимаемая высота = var(--nav-height) + safe-area-inset-top.
+     Синхронизируется из app.js при скролле; сайдбар и sticky читают ту же
+     переменную, чтобы не было щели/нахлёста между шапкой и меню. */
+  :root{--nav-height:74px;}
   .nav{
     position:fixed;top:0;left:0;right:0;z-index:100;
-    height:74px;
+    box-sizing:border-box;
+    height:calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+    padding-top:env(safe-area-inset-top, 0px);
     display:flex;align-items:center;justify-content:space-between;
-    padding:0 28px;
+    padding-left:28px;padding-right:28px;
     background:rgba(26,26,26,.92);
     -webkit-backdrop-filter:blur(10px);
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--line);
     transition:height .25s ease, background .25s ease;
   }
-  .nav.scrolled{height:60px;background:rgba(20,20,20,.96);}
+  .nav.scrolled{background:rgba(20,20,20,.96);}
 
   .nav-progress{
     position:fixed;top:0;left:0;z-index:101;height:2px;width:0%;
@@ -452,8 +459,11 @@
 
   /* ===== SIDEBAR ===== */
   .sidebar{
-    border-right:1px solid var(--line);padding:32px 20px;align-self:start;position:sticky;top:74px;
-    max-height:calc(100vh - 74px);overflow-y:auto;
+    border-right:1px solid var(--line);padding:32px 20px;align-self:start;
+    position:sticky;top:calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+    max-height:calc(100vh - var(--nav-height) - env(safe-area-inset-top, 0px));
+    max-height:calc(100dvh - var(--nav-height) - env(safe-area-inset-top, 0px));
+    overflow-y:auto;
   }
   .sidebar h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;}
   .cat{border-bottom:1px solid var(--line);}
@@ -921,19 +931,21 @@
   .card-ring-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .card-ring-controls .size-picker-btn{min-width:64px;padding:5px 8px;}
 
-  /* ===== "Гарнитуры": пара (или тройка с подвеской) в одной рамке =====
-     Рамка комплекта всегда занимает ровно 2 колонки сетки — и для пары, и для тройки.
-     Раньше тройка занимала 3, и при чётном числе колонок ряды переставали складываться
-     ровно: в конце ряда оставались пустые клетки, которые нечем заполнить (в "Гарнитурах"
-     все товары — комплекты, одиночных карточек шириной в 1 колонку там просто нет).
-     Сколько карточек показать ВНУТРИ рамки, по-прежнему задаёт --set-cols из renderSetCard:
-     у тройки они просто чуть уже. На мобильном — одна колонка и внутри, и снаружи. */
+  /* ===== "Гарнитуры": комплект из любого числа изделий в одной рамке =====
+     Рамка всегда занимает 2 колонки внешней сетки (и для пары, и для тройки, и
+     для любого N): иначе при чётном числе колонок ряды не складываются ровно.
+     Размер миниатюр ВНУТРИ рамки НЕ делится как "ширина / N" — именно это
+     ломало выравнивание: у пары квадраты становились крупнее и выше, чем у
+     тройки. Размер берётся от контейнера (--set-item-size), число изделий
+     влияет только на то, сколько таких одинаковых ячеек положить в ряд. */
   .card-set-pair{
     position:relative;
     grid-column:span 2;
     background:linear-gradient(160deg, rgba(201,162,75,.09), var(--bg-raised-2) 55%);
     border:1px solid var(--accent-dim);
     border-radius:10px;padding:12px;
+    container-type:inline-size;
+    container-name:set-card;
     /* Полный список, не только border-color/box-shadow — см. комментарий у .card
        выше: это и есть причина, по которой "Гарнитуры" появлялись без анимации —
        это правило (позже .reveal в файле) при равной специфичности класса
@@ -975,8 +987,29 @@
     background:rgba(201,162,75,.14);border:1px solid rgba(201,162,75,.3);
   }
   .card-set-weight{font-size:11.5px;color:var(--text-dim);}
-  .card-set-items{display:grid;grid-template-columns:repeat(var(--set-cols, 2), minmax(0, 1fr));gap:12px;}
-  .card-set-items .card{background:var(--bg-raised);}
+  .card-set-items{
+    --set-gap:12px;
+    /* Размер ячейки от ширины рамки, не от числа соседей: /3 — плотность, при
+       которой тройка ещё комфортно читается в двухколоночной карточке; пара и
+       любое другое N получают ТОТ ЖЕ размер, лишнее место остаётся справа
+       (или переносится на следующий ряд), высота ряда совпадает. */
+    --set-item-size:min(160px, calc((100% - 2 * var(--set-gap)) / 3));
+    display:flex;
+    flex-wrap:wrap;
+    gap:var(--set-gap);
+    align-items:stretch;
+  }
+  .card-set-items .card{
+    background:var(--bg-raised);
+    flex:0 1 auto;
+    width:var(--set-item-size);
+    max-width:100%;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+  }
+  .card-set-items .card-img{flex:none;}
+  .card-set-items .card-body{flex:1 1 auto;}
 
   /* ===== Действия комплекта: главная кнопка + скрытая покупка по отдельности =====
      Личные кнопки изделий (.card-control) по умолчанию спрятаны — основной сценарий
@@ -1002,20 +1035,13 @@
   .set-separate-toggle:hover{color:var(--accent);}
   .card-set-pair:not(.separate-mode) .card-control{display:none;}
 
-  /* ===== Мобильные: комплект компактно, а не длинной колонкой =====
-     Раньше на телефоне комплект разворачивался в одну колонку и карточка вырастала
-     на два-три экрана. Теперь кольцо и серьги стоят рядом, а подвеска (третье изделие)
-     ложится под ними компактной горизонтальной строкой — фото слева, артикул справа.
-     Порог 760px, а не 480px: на узких планшетах и телефонах в альбомной ориентации
-     в сетке всего две колонки, и тройка "в три колонки" там уже не помещается. */
+  /* Узкий экран: те же одинаковые ячейки, чуть компактнее. Без nth-child(N) и
+     без принудительного --set-cols — любое число изделий просто переносится
+     flex-wrap на следующий ряд тем же размером. */
   @media (max-width:760px){
-    .card-set-pair{--set-cols:2 !important;}
-    .card-set-items .card:nth-child(3){
-      grid-column:1 / -1;
-      display:grid;grid-template-columns:64px 1fr;align-items:center;gap:10px;
+    .card-set-items{
+      --set-item-size:min(140px, calc((100% - var(--set-gap)) / 2));
     }
-    .card-set-items .card:nth-child(3) .card-body{padding:6px 10px 6px 0;}
-    .card-set-items .card:nth-child(3) .card-bottom-row{margin-top:4px;}
   }
 
   @media (max-width:480px){
@@ -1241,23 +1267,63 @@
   /* ===== RESPONSIVE ===== */
   @media (max-width:900px){
     .layout{grid-template-columns:1fr;}
+    /* Выезжающее меню — от самого верха экрана (top:0), не от «примерно
+       высоты шапки». Раньше top:74px + унаследованный с десктопа
+       max-height:calc(100vh - 74px) конфликтовали с реальной видимой
+       областью: 100vh на мобильных не совпадает с окном, пока адресная
+       строка прячется/появляется (Chrome и Яндекс.Браузер считают её
+       по-разному) — список категорий «уезжал» или обрезался сверху.
+       height:100dvh следует за динамическим вьюпортом; max-height:none
+       снимает десктопное ограничение. Контент начинается под шапкой
+       через padding-top: var(--nav-height) — шапка выше по z-index и
+       перекрывает верх панели, щели не остаётся. */
     .sidebar{
-      position:fixed;top:74px;left:0;bottom:0;width:280px;background:var(--bg);
-      transform:translateX(-100%);transition:transform .25s ease;z-index:90;
+      position:fixed;
+      top:0;left:0;bottom:0;
+      width:min(280px, 86vw);
+      height:100%;
+      height:100dvh;
+      max-height:none;
+      padding-top:calc(var(--nav-height) + env(safe-area-inset-top, 0px));
+      padding-bottom:env(safe-area-inset-bottom, 0px);
+      padding-left:20px;padding-right:20px;
+      box-sizing:border-box;
+      background:var(--bg);
+      transform:translateX(-100%);
+      transition:transform .25s ease, padding-top .25s ease;
+      z-index:90;
       border-right:1px solid var(--line);
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
     }
-    .sidebar.open{transform:translateX(0);}
+    .sidebar.open{transform:translateX(0);box-shadow:8px 0 24px rgba(0,0,0,.35);}
     .nav-links{display:none;}
     .burger{display:flex;}
     .overlay{
-      display:none;position:fixed;inset:74px 0 0 0;background:rgba(0,0,0,.5);z-index:80;
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      z-index:80;
     }
     .overlay.show{display:block;}
-    .sidebar.open{box-shadow:8px 0 24px rgba(0,0,0,.35);}
     .main{padding-bottom:48px;}
   }
+  /* Блокировка скролла фона при открытом меню: position:fixed на body
+     (а не overflow:hidden на html/body) — на части мобильных браузеров
+     (в т.ч. Яндекс) overflow:hidden ломал прокрутку самого списка категорий
+     внутри сайдбара. top:-scrollY запоминает позицию, closeSidebarMobile
+     возвращает её через scrollTo. */
+  body.sidebar-open{
+    position:fixed;
+    left:0;right:0;
+    width:100%;
+    overflow:hidden;
+  }
   @media (max-width:480px){
-    .nav{padding:0 16px;height:68px;}
+    :root{--nav-height:68px;}
+    .nav{padding-left:16px;padding-right:16px;}
     .logo-main{font-size:18px;}
     .logo-sub{font-size:8.5px;}
     .main{padding:24px 16px 40px;}

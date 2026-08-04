@@ -649,7 +649,9 @@
   }
 
   // Пара (кольцо+серьги) или тройка (+ подвеска, бывает у "Со вставками") из одной
-  // подкатегории "Гарнитуры". Число колонок подстраивается под число изделий через --set-cols.
+  // подкатегории "Гарнитуры". Число изделий влияет только на то, сколько одинаковых
+  // ячеек положить в ряд — размер миниатюр задаёт CSS (--set-item-size), а не
+  // "ширина / N", поэтому пара и тройка (и любое N) совпадают по высоте.
   //
   // Основной сценарий — покупка комплекта целиком: одна кнопка кладёт в корзину все его
   // изделия разом. Отдельные кнопки у каждого изделия никуда не делись, но убраны под
@@ -668,7 +670,7 @@
     const totalWeight = pieces.reduce((sum, p) => sum + (parseFloat(p.weight) || 0), 0);
 
     return `
-      <div class="card-set-pair" style="--set-cols:${pieces.length};" data-set-ring="${setKey}">
+      <div class="card-set-pair" data-set-ring="${setKey}">
         <div class="card-set-head">
           <span class="card-set-label">Комплект</span>
           ${totalWeight ? `<span class="card-set-weight">${totalWeight.toFixed(2)} гр. всего</span>` : ""}
@@ -831,12 +833,22 @@
 
   // Шапка компактнее после первых 40px скролла + тонкая золотая полоса прогресса
   // чтения страницы сверху. rAF-троттлинг — scroll стреляет чаще, чем нужно менять DOM.
+  // --nav-height — только логическая высота контента шапки (74/68/60), без safe-area:
+  // safe-area добавляется в CSS через env(), иначе измерение getBoundingClientRect
+  // и запись обратно в переменную разгоняли бы высоту по кругу.
   const mainNav = document.getElementById("mainNav");
   const navProgressEl = document.getElementById("navProgress");
   let navScrollTicking = false;
+  function syncNavHeightVar(scrolled){
+    const narrow = window.matchMedia("(max-width:480px)").matches;
+    const base = scrolled ? 60 : (narrow ? 68 : 74);
+    document.documentElement.style.setProperty("--nav-height", base + "px");
+  }
   function updateNavOnScroll(){
     const y = window.scrollY || document.documentElement.scrollTop;
-    mainNav.classList.toggle("scrolled", y > 40);
+    const scrolled = y > 40;
+    mainNav.classList.toggle("scrolled", scrolled);
+    syncNavHeightVar(scrolled);
     const scrollable = document.documentElement.scrollHeight - window.innerHeight;
     navProgressEl.style.width = scrollable > 0 ? Math.min(100, (y / scrollable) * 100) + "%" : "0%";
     navScrollTicking = false;
@@ -846,6 +858,9 @@
       requestAnimationFrame(updateNavOnScroll);
       navScrollTicking = true;
     }
+  }, { passive:true });
+  window.addEventListener("resize", () => {
+    syncNavHeightVar(mainNav.classList.contains("scrolled"));
   }, { passive:true });
   updateNavOnScroll();
 
@@ -1185,17 +1200,30 @@
   const burgerBtn = document.getElementById("burgerBtn");
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
+  let sidebarScrollLockY = 0;
 
+  // Блокируем скролл фона через position:fixed на body (см. body.sidebar-open в
+  // CSS), а не через overflow:hidden на html/body: прошлый вариант на Яндекс.Браузере
+  // ломал прокрутку самого списка категорий внутри сайдбара. top:-Y запоминает
+  // позицию страницы, при закрытии возвращаем её scrollTo.
   function openSidebarMobile(){
+    sidebarScrollLockY = window.scrollY || document.documentElement.scrollTop;
     sidebar.classList.add("open");
     overlay.classList.add("show");
     burgerBtn.classList.add("open");
+    document.body.classList.add("sidebar-open");
+    document.body.style.top = `-${sidebarScrollLockY}px`;
   }
   function closeSidebarMobile(){
     if(window.innerWidth > 900) return;
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
     burgerBtn.classList.remove("open");
+    if (document.body.classList.contains("sidebar-open")) {
+      document.body.classList.remove("sidebar-open");
+      document.body.style.top = "";
+      window.scrollTo(0, sidebarScrollLockY);
+    }
   }
 
   burgerBtn.addEventListener("click", () => {
@@ -1206,6 +1234,19 @@
     }
   });
   overlay.addEventListener("click", closeSidebarMobile);
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900 && sidebar.classList.contains("open")) {
+      // closeSidebarMobile при width>900 сразу return — снимаем лок вручную.
+      sidebar.classList.remove("open");
+      overlay.classList.remove("show");
+      burgerBtn.classList.remove("open");
+      if (document.body.classList.contains("sidebar-open")) {
+        document.body.classList.remove("sidebar-open");
+        document.body.style.top = "";
+        window.scrollTo(0, sidebarScrollLockY);
+      }
+    }
+  }, { passive:true });
 
   // CSS scroll-behavior:smooth не везде срабатывает (например, если в системе включена
   // экономия анимаций) — прокручиваем вручную через JS, так стабильнее на всех браузерах
@@ -1319,11 +1360,18 @@
     return m ? m[1] : null;
   }
 
-  // Строит sku -> { ring, earring, pendant } по ВСЕМУ каталогу (rawItems), не по текущей
-  // отфильтрованной странице — см. пояснение в groupGarnituryPairs. Каталог загружается
-  // один раз и не меняется на лету, поэтому пересчитывать это на каждый рендер недорого:
-  // сама "Гарнитуры" — это несколько сотен товаров, а не тысячи.
+  // Строит sku -> { ring, earring, pendant } по ВСЕМУ каталогу (rawItems).
+  // Кэш обязателен: getFiltered() зовёт это на каждый ввод в поиск / смену
+  // категории / страницы — раньше карта собиралась заново каждый раз по ~427
+  // товарам "Гарнитуры". Каталог статичен после loadCatalog, инвалидируем
+  // только когда подменили rawItems.
+  let garnituryPartnerMapCache = null;
+  let garnituryPartnerMapSource = null;
   function buildGarnituryPartnerMap(){
+    if (garnituryPartnerMapCache && garnituryPartnerMapSource === rawItems) {
+      return garnituryPartnerMapCache;
+    }
+
     const partnerOf = new Map();
 
     const pendantBySuffix = new Map();
@@ -1354,6 +1402,8 @@
       }
     }
 
+    garnituryPartnerMapCache = partnerOf;
+    garnituryPartnerMapSource = rawItems;
     return partnerOf;
   }
 
@@ -1545,73 +1595,130 @@
     const btn = document.getElementById("installAppBtn");
     if (!btn) return;
 
-    // Уже открыт как установленное приложение (standalone) — предлагать
-    // установку ещё раз незачем. navigator.standalone — старое iOS-поле,
-    // display-mode — стандартный способ для всех остальных.
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-    if (isStandalone) return;
+    const PWA_INSTALLED_KEY = "voronin_pwa_installed";
+    const installIosOverlay = document.getElementById("installIosOverlay");
+    const installStepsList = document.getElementById("installStepsList");
+    const installTitle = document.getElementById("installIosTitle");
 
-    // User-Agent для определения платформы — обычно решение так себе (легко
-    // подделать, легко устареет), но тут это не защита, а просто "какой текст
-    // инструкции показать" — худший случай ошибки: кто-то увидит не тот текст,
-    // не более.
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
-    const isAndroid = /android/i.test(navigator.userAgent);
+    const IOS_STEPS = `
+      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m8 8 4-4 4 4"/><rect x="4" y="14" width="16" height="7" rx="1.5"/></svg></span>Нажмите «Поделиться» в строке браузера</li>
+      <li>Выберите «На экран «Домой»»</li>
+      <li>Нажмите «Добавить» в правом верхнем углу</li>`;
 
     const ANDROID_STEPS = `
       <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span>Откройте меню браузера (обычно ⋮ в углу экрана)</li>
       <li>Найдите пункт «Установить приложение» или «Добавить на главный экран»</li>
       <li>Подтвердите — значок появится на главном экране</li>`;
 
+    const DESKTOP_STEPS = `
+      <li><span class="install-step-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/></svg></span>В адресной строке браузера найдите значок установки (⊕ / монитор со стрелкой)</li>
+      <li>Или откройте меню браузера → «Установить ИП Воронин…»</li>
+      <li>Подтвердите установку</li>`;
+
+    function isStandaloneMode(){
+      return window.matchMedia("(display-mode: standalone)").matches
+        || window.matchMedia("(display-mode: fullscreen)").matches
+        || window.matchMedia("(display-mode: minimal-ui)").matches
+        || window.navigator.standalone === true;
+    }
+
+    function wasInstalledBefore(){
+      try { return localStorage.getItem(PWA_INSTALLED_KEY) === "1"; } catch { return false; }
+    }
+
+    function markInstalled(){
+      try { localStorage.setItem(PWA_INSTALLED_KEY, "1"); } catch {}
+      btn.style.display = "none";
+      clearTimeout(androidFallbackTimer);
+    }
+
+    // Уже открыт как установленное приложение или ставили раньше — кнопку не показываем.
+    if (isStandaloneMode() || wasInstalledBefore()) {
+      btn.style.display = "none";
+      return;
+    }
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /android/i.test(navigator.userAgent);
+
     let deferredPrompt = null;
-    // Chrome/Edge сами решают, когда именно прислать это событие (обычно не
-    // сразу, а после какого-то вовлечения пользователя) — до этого момента
-    // кнопки просто не видно, тут её нечем было бы наполнить.
+    let androidFallbackTimer = null;
+
+    function showInstallButton(){
+      if (isStandaloneMode() || wasInstalledBefore()) {
+        btn.style.display = "none";
+        return;
+      }
+      btn.style.display = "";
+    }
+
+    function showManualInstallHelp(){
+      if (!installIosOverlay) return;
+      if (installTitle && installStepsList) {
+        if (isIOS) {
+          installTitle.textContent = "Установка на iPhone";
+          installStepsList.innerHTML = IOS_STEPS;
+        } else if (isAndroid) {
+          installTitle.textContent = "Установка на Android";
+          installStepsList.innerHTML = ANDROID_STEPS;
+        } else {
+          installTitle.textContent = "Установка приложения";
+          installStepsList.innerHTML = DESKTOP_STEPS;
+        }
+      }
+      installIosOverlay.classList.add("show");
+    }
+
+    // Chrome/Edge сами решают, когда прислать beforeinstallprompt (обычно после
+    // вовлечения). До этого кнопки не видно — нечем было бы наполнить клик.
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      btn.style.display = "";
+      showInstallButton();
+      clearTimeout(androidFallbackTimer);
     });
 
-    // iOS такого события никогда не пришлёт (Safari beforeinstallprompt не
-    // поддерживает) — кнопку показываем сразу, клик открывает инструкцию
-    // вместо системного диалога, потому что системного диалога тут не будет.
-    if (isIOS) btn.style.display = "";
+    // iOS beforeinstallprompt не поддерживает — сразу инструкция через кнопку.
+    if (isIOS) showInstallButton();
 
-    // Часть Android-браузеров (замечено на Яндекс.Браузере) заявляют себя
-    // Chromium-совместимыми, но beforeinstallprompt либо не шлют вовсе, либо
-    // непредсказуемо. Если через разумное время после загрузки события так и
-    // не было — показываем кнопку всё равно, с ручной инструкцией вместо
-    // системного диалога: лучше так, чем кнопка, которая никогда не появится.
-    let androidFallbackTimer = null;
+    // Яндекс.Браузер и часть Android Chromium-сборок событие не шлют или шлют
+    // ненадёжно. Если за 3с не пришло — показываем кнопку с ручной инструкцией.
     if (isAndroid && !isIOS) {
       androidFallbackTimer = setTimeout(() => {
-        if (!deferredPrompt) btn.style.display = "";
+        if (!deferredPrompt) showInstallButton();
       }, 3000);
     }
 
-    const installIosOverlay = document.getElementById("installIosOverlay");
-    const installStepsList = document.getElementById("installStepsList");
     btn.addEventListener("click", async () => {
       if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        if (choice.outcome === "accepted") btn.style.display = "none";
-        return;
+        try {
+          deferredPrompt.prompt();
+          const choice = await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          if (choice.outcome === "accepted") markInstalled();
+          else btn.style.display = "none"; // отказ — не надоедаем в этой сессии
+          return;
+        } catch (err) {
+          console.warn("PWA prompt failed, falling back to manual steps:", err);
+          deferredPrompt = null;
+        }
       }
-      if (!installIosOverlay) return;
-      if (!isIOS && installStepsList) {
-        document.getElementById("installIosTitle").textContent = "Установка на Android";
-        installStepsList.innerHTML = ANDROID_STEPS;
-      }
-      installIosOverlay.classList.add("show");
+      // Нет системного диалога (iOS / Яндекс / prompt() упал) — показываем шаги.
+      showManualInstallHelp();
     });
 
     window.addEventListener("appinstalled", () => {
-      btn.style.display = "none";
-      clearTimeout(androidFallbackTimer);
+      deferredPrompt = null;
+      markInstalled();
+      if (installIosOverlay) installIosOverlay.classList.remove("show");
     });
+
+    // Смена display-mode (открыли уже установленное) — прячем кнопку на лету.
+    try {
+      window.matchMedia("(display-mode: standalone)").addEventListener("change", (e) => {
+        if (e.matches) markInstalled();
+      });
+    } catch {}
 
     if (installIosOverlay) {
       document.getElementById("installIosClose").addEventListener("click", () => installIosOverlay.classList.remove("show"));
