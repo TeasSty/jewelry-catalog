@@ -649,15 +649,21 @@
   .breadcrumb b{color:var(--text);font-weight:600;}
 
   .grid{
-    /* 200px вместо 230px — чтобы на типичной desktop-ширине помещалось 4 карточки
-       в ряд, а не 3 (по просьбе после того, как 230px в связке с max-width:1280px
-       у .layout стабильно давал только 3). */
-    display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:26px;
-    /* Комплекты "Гарнитуры" занимают 2-3 колонки (grid-column:span), а обычные товары —
-       одну. Без dense браузer расставляет карточки строго по порядку и оставляет пустую
-       клетку там, где широкая карточка не влезла в остаток строки, вместо того чтобы
-       поставить туда следующую подходящую по ширине карточку. */
+    /* Жёстко 4 колонки на desktop — при ~3k товарах плотность важнее «воздуха».
+       auto-fill+minmax раньше давал 2–3 колонки, а optimizeGridColumns ещё
+       сжимал до 2 ради «ровного ряда». */
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:18px;
+    /* Комплекты "Гарнитуры" — span 2 → два комплекта в ряд на 4-колоночной сетке.
+       dense заполняет дыры после широких карточек. */
     grid-auto-flow:dense;
+  }
+  @media (max-width:1100px){
+    .grid{grid-template-columns:repeat(3, minmax(0, 1fr));gap:16px;}
+  }
+  @media (max-width:760px){
+    .grid{grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;}
   }
   .card{
     background:linear-gradient(165deg, #2a2a2a 0%, var(--bg-raised) 48%, #1e1e1e 100%);
@@ -944,9 +950,9 @@
     flex-direction:column;
     background:var(--bg-raised);
     border:1px solid var(--line);
-    border-radius:14px;
-    padding:16px;
-    box-shadow:0 8px 24px rgba(0,0,0,.28);
+    border-radius:12px;
+    padding:12px;
+    box-shadow:0 6px 18px rgba(0,0,0,.28);
     transition:border-color .28s, box-shadow .28s, opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1);
   }
   .card-set-pair:hover{
@@ -1344,7 +1350,7 @@
     .logo-main{font-size:18px;}
     .logo-sub{font-size:8.5px;}
     .main{padding:24px 16px 40px;}
-    .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;}
+    .grid{grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;}
     .card-body{padding:10px 10px 12px;}
     .card-weight{font-size:13.5px;}
     .toolbar{gap:10px;}

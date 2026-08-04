@@ -490,27 +490,53 @@
 
   // При смене категории/страницы сразу оказываемся у каталога — без «пролёта»
   // через Hero. Порядок принципиален:
-  // 1) Снять лок скролла мобильного меню БЕЗ восстановления старой позиции
-  //    (раньше closeSidebarMobile() делал scrollTo(lockY) уже после перехода
-  //    к каталогу → пользователь снова оказывался на Hero и листал вниз вручную).
-  // 2) Мгновенно (behavior:"auto") встать на #catalog (scroll-margin учитывает шапку).
-  // 3) Только потом отрисовать сетку — иначе reveal играет во время движения.
+  // 1) Пока body.sidebar-open (position:fixed; top:-Y), замерить целевой Y каталога
+  //    в координатах страницы: rect.top + lockY.
+  // 2) Снять лок БЕЗ scrollTo(lockY) — иначе снова Hero (баг на мобильных).
+  // 3) Сразу window.scrollTo на каталог (не scrollIntoView: при снятии fixed
+  //    браузер сначала кидает scrollY в 0, и smooth/scrollIntoView иногда
+  //    «не догоняет»).
+  // 4) Отрисовать сетку и ещё раз подправить Y после смены высоты DOM.
   function scrollThenRenderGrid(){
+    const catalog = document.getElementById("catalog");
     const side = document.getElementById("sidebar");
     const ov = document.getElementById("overlay");
     const burger = document.getElementById("burgerBtn");
+    const scrollMargin = 84;
+
+    const locked = document.body.classList.contains("sidebar-open");
+    const baseY = locked
+      ? sidebarScrollLockY
+      : (window.scrollY || document.documentElement.scrollTop);
+    let targetY = Math.max(
+      0,
+      catalog.getBoundingClientRect().top + baseY - scrollMargin
+    );
+
     if (window.innerWidth <= 900 && side) {
       side.classList.remove("open");
       if (ov) ov.classList.remove("show");
       if (burger) burger.classList.remove("open");
-      if (document.body.classList.contains("sidebar-open")) {
+      if (locked) {
         document.body.classList.remove("sidebar-open");
         document.body.style.top = "";
-        // намеренно НЕ возвращаем прежний scrollY — уходим в каталог
+        // намеренно НЕ делаем scrollTo(sidebarScrollLockY)
       }
     }
-    document.getElementById("catalog").scrollIntoView({ behavior: "auto", block: "start" });
+
+    window.scrollTo(0, targetY);
     renderGrid();
+    requestAnimationFrame(() => {
+      const y = Math.max(
+        0,
+        catalog.getBoundingClientRect().top +
+          (window.scrollY || document.documentElement.scrollTop) -
+          scrollMargin
+      );
+      if (Math.abs((window.scrollY || document.documentElement.scrollTop) - y) > 2) {
+        window.scrollTo(0, y);
+      }
+    });
   }
 
   // 1 товар / 2 товара / 5 товаров — раньше было только "товар" и "товаров",
@@ -567,29 +593,14 @@
     optimizeGridColumns();
   }
 
-  // ===== Число колонок сетки — на 1 меньше, если так ряды заполняются ровно =====
-  // В отличие от прошлой попытки (растягивать отдельные карточки — выглядело
-  // криво, карточки становились разного размера в одном ряду) здесь все карточки
-  // остаются одинаковыми: просто пробуем сетку из columns-1 колонок и смотрим,
-  // делится ли на неё общее число товаров без остатка. Если нет — не гонимся
-  // дальше (columns-2, columns-3...), просто оставляем как есть.
-  // Гарнитуры (grid-column:span 2) не трогаем — там своя раскладка.
+  // ===== Число колонок сетки =====
+  // Раньше функция сжимала auto-fill сетку на 1 колонку, если так ряды делились
+  // без остатка — на практике это часто давало 2 колонки вместо 4 при ~20 товарах
+  // на странице. Сейчас колонки заданы жёстко в CSS (4 / 3 / 2) — здесь только
+  // сбрасываем инлайновый стиль на случай старого кэша/сессии.
   function optimizeGridColumns(){
     const grid = document.getElementById("productGrid");
-    const items = [...grid.children];
-    grid.style.gridTemplateColumns = ""; // сброс к обычному CSS-правилу (auto-fill/minmax)
-    if (items.length === 0) return;
-    if (items.some(el => el.classList.contains("card-set-pair"))) return;
-
-    const naturalColumns = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
-    if (naturalColumns <= 1 || items.length % naturalColumns === 0) return; // и так ровно
-
-    const reducedColumns = naturalColumns - 1;
-    // >=2, а не >=1: сжать до одной колонки во всю ширину ради одной пустой
-    // клетки — это худший размен, чем сама пустота (см. предыдущий откат).
-    if (reducedColumns >= 2 && items.length % reducedColumns === 0) {
-      grid.style.gridTemplateColumns = `repeat(${reducedColumns}, 1fr)`;
-    }
+    if (grid) grid.style.gridTemplateColumns = "";
   }
 
   // Число колонок зависит от ширины экрана — пересчитываем и при изменении
@@ -612,9 +623,23 @@
         img.classList.add("loaded");
         img.closest(".card-img")?.classList.add("img-loaded");
       };
-      if (img.complete) { markLoaded(); return; }
+      if (img.complete && img.naturalWidth > 0) { markLoaded(); return; }
       img.addEventListener("load", markLoaded, { once: true });
-      img.addEventListener("error", markLoaded, { once: true });
+      img.addEventListener("error", () => {
+        // HD пропал / 404 — откат на обычный jpg из data-fallback, без битой иконки.
+        const fb = img.getAttribute("data-fallback");
+        if (fb && img.getAttribute("src") !== fb) {
+          img.removeAttribute("data-fallback");
+          // Убираем <source>, иначе picture снова выберет битый HD.
+          const pic = img.closest("picture");
+          if (pic) pic.querySelectorAll("source").forEach(s => s.remove());
+          img.src = fb;
+          img.addEventListener("load", markLoaded, { once: true });
+          img.addEventListener("error", markLoaded, { once: true });
+          return;
+        }
+        markLoaded();
+      }, { once: true });
     });
   }
 
@@ -655,20 +680,22 @@
     });
   }
 
-  // AVIF/WebP лежат рядом с оригиналом под тем же именем (scripts/enhance-all.mjs
-  // прогнал весь images/ разом, проверил — на все 2978 файлов есть оба варианта,
-  // без исключений) — только для локальных images/itemsNNN.jpg, у внешних (ImgBB
-  // и т.п.) вариантов нет и не будет, для них картинка остаётся как есть, без
-  // <picture>. Раньше уже ловил баг именно тут: если сослаться на .webp/.avif,
-  // которого ещё нет на диске, браузер показывает битую картинку и НЕ откатывается
-  // на <img> сам — <picture> так не работает. Поэтому это подключено только
-  // теперь, когда для каждого файла подтверждено наличие обоих вариантов.
+  // AVIF/WebP лежат рядом с оригиналом (scripts/enhance-all.mjs). Для сетки
+  // каталога берём HD-варианты (images/itemsNNN-hd.*) — тот же Real-ESRGAN
+  // апскейл, что раньше подгружался только в лайтбоксе. На всех ~2978 локальных
+  // jpg есть -hd.jpg/.webp/.avif; внешние URL (ImgBB) без вариантов — <picture>
+  // не строим. Если когда-нибудь HD пропадёт, onerror на <img> откатит на обычный jpg.
   function localPictureSources(imgPath){
     const m = /^images\/(items\d+)\.jpg$/i.exec(imgPath);
     if (!m) return "";
     const base = m[1];
-    return `<source srcset="images/${base}.avif" type="image/avif">`
-         + `<source srcset="images/${base}.webp" type="image/webp">`;
+    return `<source srcset="images/${base}-hd.avif" type="image/avif">`
+         + `<source srcset="images/${base}-hd.webp" type="image/webp">`;
+  }
+
+  function catalogImgSrc(imgPath){
+    const m = /^images\/(items\d+)\.jpg$/i.exec(imgPath);
+    return m ? `images/${m[1]}-hd.jpg` : imgPath;
   }
 
   function renderProductCard(item){
@@ -676,12 +703,14 @@
     // (20 обычных товаров, до ~40 с учётом пар "Гарнитуры" — совсем немного для
     // современного соединения), а лень откладывала подгрузку до прокрутки и на
     // мгновение показывала иконку "битой" картинки, пока не долистаешь до неё.
+    const src = catalogImgSrc(item.img);
+    const fallback = escapeHtml(item.img);
     return `
       <div class="card">
         <div class="card-img" data-img="${escapeHtml(item.img)}">
           <picture>
             ${localPictureSources(item.img)}
-            <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.sku)}">
+            <img src="${escapeHtml(src)}" alt="${escapeHtml(item.sku)}" data-fallback="${fallback}">
           </picture>
         </div>
         <div class="card-body">
@@ -1660,13 +1689,10 @@
   // только тогда открываем оверлей — до этого момента <img> невидим
   // (visibility:hidden у .modal-overlay), так что даже гипотетический
   // "старый кадр" просто некому увидеть.
-  // Для локальных фото (images/itemsNNN.jpg) может существовать отдельная
-  // HD-версия (images/itemsNNN-hd.jpg) — тот же кадр, прогнанный через
-  // ИИ-апскейл (см. scripts/ai-upscale-batch.mjs), специально под лайтбокс:
-  // обычный файл остаётся маленьким для сетки карточек, HD грузится только
-  // здесь, только когда фото реально открывают. Обрабатывается не весь каталог
-  // разом, поэтому HD-версия есть не у всех — если её нет (404), тихо
-  // откатываемся на обычный файл, без ошибки на экране.
+  // Для локальных фото (images/itemsNNN.jpg) есть HD-версия (images/itemsNNN-hd.jpg) —
+  // тот же кадр через Real-ESRGAN. В сетке каталога HD уже стоит по умолчанию;
+  // здесь при открытии лайтбокса ещё раз предпочитаем HD (на случай внешнего URL
+  // или старого кэша без -hd в src карточки). Если HD нет (404) — обычный файл.
   function hdVariant(src){
     const m = /^(images\/items\d+)\.jpg$/i.exec(src);
     return m ? `${m[1]}-hd.jpg` : null;
