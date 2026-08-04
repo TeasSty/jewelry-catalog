@@ -319,6 +319,19 @@
     showAdminInterface();
   });
 
+  // После долгого простоя вкладки (телефон уснул, админ ушёл на час) ID-токен
+  // Firebase может протухнуть, а следующий запрос к Firestore падает. При возврате
+  // на вкладку тихо обновляем токен — без этого панель «вылетала» на следующем
+  // действии, хотя сессия формально ещё жива.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const user = auth.currentUser;
+    if (!user) return;
+    user.getIdToken(true).catch((err) => {
+      console.warn("Не удалось обновить ID-токен после возврата на вкладку:", err);
+    });
+  });
+
   // Вход / Выход
   document.getElementById("loginBtn").addEventListener("click", async () => {
     const email = document.getElementById("authEmail").value.trim();
