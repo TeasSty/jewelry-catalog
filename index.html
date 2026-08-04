@@ -680,24 +680,24 @@
   .card-img{
     position:relative;
     aspect-ratio:1/1;
-    /* Графитовый фон вместо белого #f4f4f2 — золото читается контрастнее.
-       Фото товаров сняты на белом; mix-blend-mode:multiply убирает белую подложку
-       поверх тёмного фона без перекодирования 3000 файлов. */
-    background:linear-gradient(160deg, #323232 0%, #242424 55%, #1c1c1c 100%);
+    /* Чистый чёрный под фото (как в предметной съёмке). У гарнитур белый
+       студийный фон уже вырезан в сами файлы (scripts/garnitury-black-bg.mjs);
+       у остальных категорий пока остаётся исходный белый в JPG — фон карточки
+       всё равно #000, без multiply, чтобы не затемнять металл. */
+    background:#000;
     display:flex;align-items:center;justify-content:center;overflow:hidden;
     cursor:zoom-in;
   }
   .card-img img{
     width:100%;height:100%;object-fit:contain;opacity:0;
-    mix-blend-mode:multiply;
     transition:transform .5s cubic-bezier(.2,.8,.2,1), opacity .3s ease;
   }
   .card-img img.loaded{opacity:1;}
   .card:hover .card-img img{transform:scale(1.04);}
-  /* Тёмная заглушка загрузки — в тон новому фону фото, без светлой вспышки. */
+  /* Тёмная заглушка загрузки — в тон чёрному фону фото. */
   .card-img::before{
     content:"";position:absolute;inset:0;
-    background:linear-gradient(100deg, #2a2a2a 30%, #3a3a3a 50%, #2a2a2a 70%);
+    background:linear-gradient(100deg, #111 30%, #222 50%, #111 70%);
     background-size:200% 100%;
     animation:img-shimmer 1.4s ease-in-out infinite;
   }
@@ -801,7 +801,7 @@
      (плюс небольшой запас), иначе на весь экран (90vw/90vh) картинка растягивается
      в 3-4 раза и становится заметно размытой — крупнее исходного разрешения не сделать. */
   .lightbox-content{max-width:min(90vw,560px);max-height:min(90vh,560px);position:relative;}
-  .lightbox-content img{max-width:min(90vw,560px);max-height:min(90vh,560px);object-fit:contain;border-radius:8px;background:linear-gradient(160deg,#2e2e2e,#1c1c1c);mix-blend-mode:normal;}
+  .lightbox-content img{max-width:min(90vw,560px);max-height:min(90vh,560px);object-fit:contain;border-radius:8px;background:#000;}
   .lightbox-content .modal-close{top:-36px;right:-6px;color:#fff;}
 
   .auth-tabs{display:flex;gap:8px;margin-bottom:18px;}
@@ -880,7 +880,7 @@
 
   .cart-item{border-bottom:1px solid var(--line);padding:9px 0;}
   .cart-item-row{display:flex;gap:10px;align-items:center;}
-  .cart-item-row img{width:38px;height:38px;object-fit:contain;background:#2a2a2a;border-radius:5px;flex:none;mix-blend-mode:multiply;}
+  .cart-item-row img{width:38px;height:38px;object-fit:contain;background:#000;border-radius:5px;flex:none;}
   .cart-item-info{flex:1;min-width:0;}
   .cart-item-sku{font-size:12.5px;font-weight:600;}
   .cart-item-weight{font-size:11px;color:var(--text-dim);}
@@ -995,11 +995,10 @@
     flex:none;
     aspect-ratio:1 / 1;
     width:100%;
-    background:linear-gradient(160deg, #343434 0%, #252525 55%, #1d1d1d 100%);
+    background:#000;
   }
   .card-set-items .card-img img{
     width:100%;height:100%;object-fit:contain;
-    mix-blend-mode:multiply;
   }
   .card-set-items .card-body{
     flex:1 1 auto;
