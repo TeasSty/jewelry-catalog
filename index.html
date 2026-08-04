@@ -947,12 +947,16 @@
   .card-ring-controls .size-picker-btn{min-width:64px;padding:5px 8px;}
 
   /* ===== "Гарнитуры": комплект в одной рамке =====
-     Рамка занимает 2 колонки внешней сетки. Внутри — ровная галерея:
-     2 изделия → две равные колонки (без пустой третьей ячейки),
-     3 изделия → три равные. Фото на белом студийном фоне. */
+     Рамка занимает 2 колонки внешней сетки.
+     align-self:start — не растягивать рамку по высоте соседа в сетке
+     (иначе у тройки с более низкими фото оставалась пустота над кнопками). */
   .card-set-pair{
     position:relative;
     grid-column:span 2;
+    align-self:start;
+    height:auto;
+    display:flex;
+    flex-direction:column;
     background:
       radial-gradient(ellipse 90% 55% at 12% -10%, rgba(201,162,75,.14), transparent 58%),
       radial-gradient(ellipse 70% 45% at 100% 110%, rgba(201,162,75,.07), transparent 55%),
@@ -974,6 +978,7 @@
   }
   .card-set-head{
     display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px;
+    flex:none;
   }
   .card-set-label{
     display:inline-block;font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;
@@ -982,15 +987,16 @@
   }
   .card-set-weight{font-size:11.5px;color:var(--text-dim);}
 
-  /* Галерея: CSS Grid по числу изделий (data-count), без «дыры» у пары. */
+  /* Галерея: 2 → две колонки, 3 → три, без пустой ячейки. */
   .card-set-items{
     display:grid;
     gap:12px;
-    align-items:stretch;
+    align-items:start;
+    flex:none;
+    width:100%;
   }
   .card-set-items[data-count="2"]{grid-template-columns:repeat(2, minmax(0, 1fr));}
   .card-set-items[data-count="3"]{grid-template-columns:repeat(3, minmax(0, 1fr));}
-  /* Запас, если data-count нет — как у тройки. */
   .card-set-items:not([data-count]){grid-template-columns:repeat(3, minmax(0, 1fr));}
 
   .card-set-items > .card{
@@ -1028,7 +1034,7 @@
     filter:none;
   }
   .card-set-items .card-body{
-    flex:1 1 auto;
+    flex:none;
     padding:10px 10px 12px;
     text-align:center;
   }
@@ -1039,6 +1045,7 @@
   /* ===== Действия комплекта: главная кнопка + скрытая покупка по отдельности ===== */
   .card-set-actions{
     display:flex;flex-direction:column;gap:8px;align-items:stretch;
+    flex:none;
     margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);
   }
   .set-size-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
