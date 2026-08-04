@@ -987,28 +987,33 @@
     background:rgba(201,162,75,.14);border:1px solid rgba(201,162,75,.3);
   }
   .card-set-weight{font-size:11.5px;color:var(--text-dim);}
+  /* Внутри рамки всегда одна и та же сетка из 3 равных колонок — это плотность
+     дизайна двухколоночной карточки, а не «костыль под тройку». Пара занимает
+     первые две ячейки (третья пустая), тройка — все три, четыре и больше
+     переносятся на следующий ряд. Размер миниатюры больше не зависит от N,
+     высоты рядов у пары и тройки совпадают. */
   .card-set-items{
     --set-gap:12px;
-    /* Размер ячейки от ширины рамки, не от числа соседей: /3 — плотность, при
-       которой тройка ещё комфортно читается в двухколоночной карточке; пара и
-       любое другое N получают ТОТ ЖЕ размер, лишнее место остаётся справа
-       (или переносится на следующий ряд), высота ряда совпадает. */
-    --set-item-size:min(160px, calc((100% - 2 * var(--set-gap)) / 3));
-    display:flex;
-    flex-wrap:wrap;
+    --set-tracks:3;
+    display:grid;
+    grid-template-columns:repeat(var(--set-tracks), minmax(0, 1fr));
     gap:var(--set-gap);
     align-items:stretch;
   }
   .card-set-items .card{
     background:var(--bg-raised);
-    flex:0 1 auto;
-    width:var(--set-item-size);
-    max-width:100%;
     min-width:0;
     display:flex;
     flex-direction:column;
   }
-  .card-set-items .card-img{flex:none;}
+  .card-set-items .card-img{
+    flex:none;
+    aspect-ratio:1 / 1;
+    width:100%;
+  }
+  .card-set-items .card-img img{
+    width:100%;height:100%;object-fit:contain;
+  }
   .card-set-items .card-body{flex:1 1 auto;}
 
   /* ===== Действия комплекта: главная кнопка + скрытая покупка по отдельности =====
@@ -1035,13 +1040,10 @@
   .set-separate-toggle:hover{color:var(--accent);}
   .card-set-pair:not(.separate-mode) .card-control{display:none;}
 
-  /* Узкий экран: те же одинаковые ячейки, чуть компактнее. Без nth-child(N) и
-     без принудительного --set-cols — любое число изделий просто переносится
-     flex-wrap на следующий ряд тем же размером. */
+  /* Узкий экран: те же 3 равные дорожки (пара/тройка одной высоты), чуть плотнее
+     зазор. Без nth-child и без смены числа колонок от количества изделий. */
   @media (max-width:760px){
-    .card-set-items{
-      --set-item-size:min(140px, calc((100% - var(--set-gap)) / 2));
-    }
+    .card-set-items{--set-gap:8px;}
   }
 
   @media (max-width:480px){
@@ -1340,19 +1342,22 @@
      (max-width:760px) ловит подавляющее большинство телефонов по ширине вьюпорта,
      (pointer:coarse) добавляет любое touch-устройство независимо от ширины (крупные
      Android-планшеты и т.п.) — то есть именно "нет настоящей мыши", а не просто
-     "узкий экран". Три вещи под подозрением у среднего Android: постоянные фоновые
-     анимации (перерасчёт/композиция каждый кадр, бесконечно, даже когда никто не
-     смотрит), огромный слой facet (140vmax — далеко за пределами экрана, но браузер
-     всё равно обязан его закомпоновать) и SVG feTurbulence-фильтр (дорогая растеризация
-     на статичном, почти невидимом эффекте — 3.5% непрозрачности). Убираем все три:
-     разница на глаз на телефоне, где эти детали и так едва заметны на маленьком
-     экране, — исчезающе мала, а кадров в секунду это освобождает заметно больше,
-     чем один только Aurora-блюр, который уже убрали выше для всех размеров экрана.
-     Сам факт появления Hero (word-in/fade-up/visual-in) не трогаем — это разовые
-     переходы при загрузке, не постоянная нагрузка, дешёвые в любом случае. */
+     "узкий экран".
+     Раньше здесь полностью выключали .hero-facet (вращающийся «луч» света) —
+     на телефоне пропадала та же световая грань, что видна на компьютере.
+     Оставляем луч видимым, но статичным: без бесконечного rotate на 140vmax
+     (дорого на среднем Android) и без grain/feTurbulence. Aurora-блобы тоже
+     без will-change и без анимации дрейфа. */
   @media (max-width:760px), (pointer:coarse){
-    .hero-facet{display:none;}
+    .hero-facet{
+      display:block;
+      opacity:1;
+      animation:none;
+      /* Фиксированный угол — луч читается, но GPU не крутит огромный слой */
+      transform:translate(-50%,-50%) rotate(28deg);
+    }
     .hero-grain{display:none;}
+    .hero-aurora{opacity:1;animation:none;}
     .hero-aurora .blob{animation:none;will-change:auto;}
     .hero-btn{animation:none;}
     /* Шапка фиксирована и остаётся на экране весь скролл — значит backdrop-filter
