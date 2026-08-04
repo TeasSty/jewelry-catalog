@@ -14,6 +14,32 @@
      успеть до восстановления именно при reload (для обычного перехода по ссылке
      хватало и внешнего файла — там просто нечего восстанавливать, новая запись). -->
 <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+<!-- Критично ДО module/app.js и ДО CSP: часть клиентов держит старый Service Worker
+     (PWA), который отдаёт устаревший/битый index+app из Cache Storage. Пока SW
+     контролирует вкладку, новый app.js может вообще не выполниться. Этот инлайн
+     снимает регистрации, чистит ВСЕ caches и один раз перезагружает страницу,
+     если вкладка была под контролем SW — после этого грузится живой сайт с сети. -->
+<script>
+(function(){
+  var FLAG = "voronin_sw_purge_v3";
+  var alreadyPurged = false;
+  try { alreadyPurged = !!sessionStorage.getItem(FLAG); } catch (e) {}
+  if (!("serviceWorker" in navigator)) return;
+  var wasControlled = !!navigator.serviceWorker.controller;
+  var done = function(){
+    try { sessionStorage.setItem(FLAG, "1"); } catch (e) {}
+    // Один reload за сессию, только если вкладка была под контролем старого SW
+    if (wasControlled && !alreadyPurged) location.reload();
+  };
+  var clearCaches = (typeof caches !== "undefined" && caches.keys)
+    ? caches.keys().then(function(keys){ return Promise.all(keys.map(function(k){ return caches.delete(k); })); })
+    : Promise.resolve();
+  var unreg = navigator.serviceWorker.getRegistrations().then(function(regs){
+    return Promise.all(regs.map(function(r){ return r.unregister(); }));
+  });
+  Promise.all([unreg, clearCaches]).then(done).catch(done);
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <!-- Content-Security-Policy: белый список того, откуда странице разрешено брать код,
@@ -1832,7 +1858,8 @@
   </div>
 </div>
 
-<script type="module" src="app.js"></script>
+<!-- ?v= — сброс HTTP-кэша у клиентов со старой оболочкой (GitHub Pages max-age=600) -->
+<script type="module" src="app.js?v=20260804c"></script>
 
 </body>
 </html>

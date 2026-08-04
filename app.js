@@ -1,24 +1,22 @@
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { initializeFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendEmailVerification, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  // Firebase НЕ импортируем статически с gstatic.com: у части клиентов (блокировки,
+  // DNS, корпоративный прокси, сбои CDN) модуль firebase-*.js не грузится — и тогда
+  // ПАДАЕТ ВЕСЬ app.js, вместе с каталогом. Каталог должен открываться без Google.
+  // Auth/Firestore подключаем лениво; если не вышло — витрина работает, вход/заказ нет.
   import { firebaseConfig, relayUrl } from "./config.js";
 
-  const app = initializeApp(firebaseConfig);
-  // initializeFirestore вместо обычного getFirestore — настраиваем транспорт.
-  //
-  // По умолчанию Firestore общается по WebChannel — это потоковое соединение поверх HTTP.
-  // Через VPN и корпоративные прокси (а из России к Google почти всегда идут именно так)
-  // такое соединение часто рвётся или не устанавливается вовсе. Симптом характерный:
-  // вход в аккаунт проходит нормально (Firebase Auth — обычные HTTPS-запросы, прокси их
-  // пропускает), а любое обращение к базе тихо падает.
-  //
-  // experimentalAutoDetectLongPolling, а не жёсткий experimentalForceLongPolling: SDK
-  // сам проверяет при подключении, работает ли быстрый потоковый канал, и переходит на
-  // обычный HTTP-опрос только если нет — раньше опрос был включён всегда и для всех,
-  // даже для тех посетителей, кому он не нужен, а он ощутимо медленнее (у каждого
-  // запроса своя отдельная накладная на установление соединения, а не общий канал).
-  const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
-  const auth = getAuth(app);
+  let db = null;
+  let auth = null;
+  let firebaseAvailable = false;
+  let signInWithEmailAndPassword;
+  let createUserWithEmailAndPassword;
+  let signOut;
+  let onAuthStateChanged;
+  let sendEmailVerification;
+  let updateProfile;
+  let sendPasswordResetEmail;
+  let collection;
+  let addDoc;
+  let serverTimestamp;
 
   // Ссылка из письма (подтверждение почты, сброс пароля) ведёт на нашу собственную
   // страницу auth-action.html вместо белой страницы Google по умолчанию — там то же
@@ -29,6 +27,47 @@
     url: location.origin + "/auth-action.html",
     handleCodeInApp: true
   };
+
+  const FIREBASE_UNAVAILABLE_MSG =
+    "Сервис входа временно недоступен (нет связи с сервером авторизации). Каталог можно смотреть — попробуйте войти позже или с другой сети.";
+
+  async function initFirebase() {
+    const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+    ]);
+
+    const app = initializeApp(firebaseConfig);
+    // initializeFirestore вместо обычного getFirestore — настраиваем транспорт.
+    //
+    // По умолчанию Firestore общается по WebChannel — это потоковое соединение поверх HTTP.
+    // Через VPN и корпоративные прокси (а из России к Google почти всегда идут именно так)
+    // такое соединение часто рвётся или не устанавливается вовсе. Симптом характерный:
+    // вход в аккаунт проходит нормально (Firebase Auth — обычные HTTPS-запросы, прокси их
+    // пропускает), а любое обращение к базе тихо падает.
+    //
+    // experimentalAutoDetectLongPolling, а не жёсткий experimentalForceLongPolling: SDK
+    // сам проверяет при подключении, работает ли быстрый потоковый канал, и переходит на
+    // обычный HTTP-опрос только если нет — раньше опрос был включён всегда и для всех,
+    // даже для тех посетителей, кому он не нужен, а он ощутимо медленнее (у каждого
+    // запроса своя отдельная накладная на установление соединения, а не общий канал).
+    db = firestoreMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+    auth = authMod.getAuth(app);
+
+    collection = firestoreMod.collection;
+    addDoc = firestoreMod.addDoc;
+    serverTimestamp = firestoreMod.serverTimestamp;
+    signInWithEmailAndPassword = authMod.signInWithEmailAndPassword;
+    createUserWithEmailAndPassword = authMod.createUserWithEmailAndPassword;
+    signOut = authMod.signOut;
+    onAuthStateChanged = authMod.onAuthStateChanged;
+    sendEmailVerification = authMod.sendEmailVerification;
+    updateProfile = authMod.updateProfile;
+    sendPasswordResetEmail = authMod.sendPasswordResetEmail;
+
+    firebaseAvailable = true;
+  }
 
   // Изображения лежат локально в папке проекта images/ (относительный путь — работает и на GitHub Pages в подкаталоге)
   const IMG_BASE = "images/";
@@ -1585,10 +1624,9 @@
   noticeOverlay.addEventListener("click", (e) => { if(e.target === noticeOverlay) noticeOverlay.classList.remove("show"); });
 
   // ===== PWA ОТКЛЮЧЁН =====
-  // Кнопка установки и связанный UI убраны: на части телефонов (Яндекс/Android)
-  // beforeinstallprompt ненадёжен, а сломанная иконка хуже, чем её отсутствие.
-  // Снимаем ранее зарегистрированный service worker и его кеши, чтобы старые
-  // установки/оболочка не перехватывали загрузку устаревшим index.html.
+  // Кнопка установки и связанный UI убраны. Снимаем ранее зарегистрированный
+  // service worker и ВСЕ Cache Storage (не только voronin-shell*): старые оболочки
+  // могли кэшировать битый index/app под другими именами.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then((regs) => {
       regs.forEach((reg) => reg.unregister());
@@ -1596,7 +1634,7 @@
   }
   if (typeof caches !== "undefined" && caches.keys) {
     caches.keys().then((keys) => {
-      keys.filter((k) => k.startsWith("voronin-shell")).forEach((k) => caches.delete(k));
+      keys.forEach((k) => caches.delete(k));
     }).catch(() => {});
   }
 
@@ -1695,7 +1733,9 @@
   const authOverlay = document.getElementById("authOverlay");
   let authMode = "login";
 
-  onAuthStateChanged(auth, async (user) => {
+  function bindAuthStateListener() {
+    if (!firebaseAvailable || !auth) return;
+    onAuthStateChanged(auth, async (user) => {
     // Сессия могла остаться с прошлого раза (Firebase хранит вход между визитами) —
     // если почта так и не подтверждена, не считаем человека вошедшим.
     //
@@ -1735,7 +1775,8 @@
     document.getElementById("accountMenuEmail").textContent = displayLabel;
     if(!currentUser) document.getElementById("accountMenu").classList.remove("show");
     updateCheckoutUI();
-  });
+    });
+  }
 
   function updateCheckoutUI(){
     const loggedOut = document.getElementById("checkoutLoggedOut");
@@ -1750,11 +1791,15 @@
     if(currentUser){
       document.getElementById("accountMenu").classList.toggle("show");
     } else {
+      if(!firebaseAvailable){
+        showNotice(FIREBASE_UNAVAILABLE_MSG, { title: "Вход недоступен", type: "error" });
+        return;
+      }
       openAuthModal("login");
     }
   });
   document.getElementById("accountLogoutBtn").addEventListener("click", () => {
-    signOut(auth);
+    if(firebaseAvailable && auth) signOut(auth);
     document.getElementById("accountMenu").classList.remove("show");
   });
   document.addEventListener("click", (e) => {
@@ -1765,6 +1810,10 @@
   });
   document.getElementById("checkoutLoginBtn").addEventListener("click", () => {
     cartOverlay.classList.remove("show");
+    if(!firebaseAvailable){
+      showNotice(FIREBASE_UNAVAILABLE_MSG, { title: "Вход недоступен", type: "error" });
+      return;
+    }
     openAuthModal("login");
   });
 
@@ -1802,6 +1851,12 @@
     const errEl = document.getElementById("authError");
     const submitBtn = document.getElementById("authSubmitBtn");
     errEl.style.display = "none";
+
+    if(!firebaseAvailable || !auth){
+      errEl.textContent = FIREBASE_UNAVAILABLE_MSG;
+      errEl.style.display = "block";
+      return;
+    }
 
     if(!email || !pass){
       errEl.textContent = "Заполните email и пароль";
@@ -1905,6 +1960,12 @@
     if(!isValidEmail(email)) return; // кнопка и так недоступна без валидного email, это подстраховка
     resetError.style.display = "none";
 
+    if(!firebaseAvailable || !auth){
+      resetError.textContent = FIREBASE_UNAVAILABLE_MSG;
+      resetError.style.display = "block";
+      return;
+    }
+
     const originalLabel = resetSubmitBtn.textContent;
     try {
       resetSubmitBtn.disabled = true;
@@ -1975,6 +2036,11 @@
     const phoneInput = document.getElementById("orderPhone");
     const phone = phoneInput.value.trim();
     const comment = document.getElementById("orderComment").value.trim();
+
+    if(!firebaseAvailable || !db){
+      showNotice(FIREBASE_UNAVAILABLE_MSG, { title: "Заказ недоступен", type: "error" });
+      return;
+    }
 
     if(!phone){
       phoneInput.classList.add("invalid");
@@ -2109,4 +2175,12 @@
   document.getElementById("retryLoadBtn").addEventListener("click", () => window.location.reload());
 
   updateCartBadge();
+  // Каталог — сразу, без ожидания Google/Firebase. Иначе при блокировке gstatic
+  // половина клиентов видит «вечную загрузку» или пустую страницу.
   loadCatalog();
+  initFirebase()
+    .then(() => { bindAuthStateListener(); })
+    .catch((err) => {
+      console.error("Firebase недоступен — каталог работает без входа/заказов:", err);
+      firebaseAvailable = false;
+    });
