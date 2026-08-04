@@ -124,8 +124,8 @@
     --text-dim:#a89f94;
     --accent:#c9a24b;
     --accent-dim:#8f7736;
-    /* Студийный холст под фото: тёплый paper, не чистый #fff. */
-    --photo-well:#f3efe8;
+    /* Студийный холст под фото: чистый белый — как фон студийных снимков. */
+    --photo-well:#ffffff;
     /* Витринный шрифт — только для крупных заголовков (пока: Hero). Inter остаётся
        рабочим шрифтом интерфейса везде, где он и был — карточки, формы, навигация.
        Контраст serif-заголовок / sans-интерфейс — по дизайн-аудиту сайта, этап 1. */
@@ -699,10 +699,10 @@
   }
   .card-img img.loaded{opacity:1;}
   .card:hover .card-img img{transform:scale(1.04);}
-  /* Заглушка загрузки — в тон paper-колодцу. */
+  /* Заглушка загрузки — в тон белому колодцу. */
   .card-img::before{
     content:"";position:absolute;inset:0;
-    background:linear-gradient(100deg, #ebe6dc 30%, #f3efe8 50%, #ebe6dc 70%);
+    background:linear-gradient(100deg, #f0f0f0 30%, #ffffff 50%, #f0f0f0 70%);
     background-size:200% 100%;
     animation:img-shimmer 1.4s ease-in-out infinite;
   }
