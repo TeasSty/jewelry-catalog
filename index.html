@@ -997,35 +997,54 @@
     gap:12px;
     align-items:stretch;
   }
+  /* Без «карточки в карточке»: изделия лежат прямо на рамке комплекта.
+     Белые студийные фото гасим через multiply на графитовом колодце —
+     без перекодирования файлов (cutout на #000 давал ореолы на ажуре). */
   .card-set-items > .card{
     flex:0 0 calc((100% - 24px) / 3);
     width:calc((100% - 24px) / 3);
     max-width:calc((100% - 24px) / 3);
     box-sizing:border-box;
-    background:var(--bg-raised);
-    border-color:var(--line);
-    border-radius:8px;
+    background:transparent;
+    border:none;
+    border-radius:0;
+    box-shadow:none;
     min-width:0;
     display:flex;
     flex-direction:column;
   }
   .card-set-items > .card:hover{
-    border-color:var(--accent-dim);
-    box-shadow:0 6px 16px rgba(0,0,0,.3);
+    border:none;
+    box-shadow:none;
   }
   .card-set-items .card-img{
     flex:none;
     aspect-ratio:1 / 1;
     width:100%;
-    background:#ffffff;
+    border-radius:8px;
+    background:linear-gradient(160deg, #323232 0%, #242424 55%, #1c1c1c 100%);
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .card-set-items .card-img::before{
+    background:linear-gradient(100deg, #2a2a2a 30%, #3a3a3a 50%, #2a2a2a 70%);
+    background-size:200% 100%;
+    border-radius:8px;
   }
   .card-set-items .card-img img{
     width:100%;height:100%;object-fit:contain;
+    mix-blend-mode:multiply;
+    /* Multiply чуть приглушает металл — чуть поднимаем яркость обратно. */
+    filter:brightness(1.07) contrast(1.04);
+  }
+  .card-set-items > .card:hover .card-img{
+    border-color:rgba(201,162,75,.28);
   }
   .card-set-items .card-body{
     flex:1 1 auto;
-    padding:10px 10px 12px;
+    padding:10px 4px 2px;
   }
+  .card-set-items .card-sku{font-size:12px;}
+  .card-set-items .card-weight{font-size:13px;}
 
   /* ===== Действия комплекта: главная кнопка + скрытая покупка по отдельности =====
      Личные кнопки изделий (.card-control) по умолчанию спрятаны — основной сценарий
@@ -1033,16 +1052,16 @@
      "Купить отдельно" и возвращает их на место. */
   .card-set-actions{
     display:flex;flex-direction:column;gap:8px;align-items:stretch;
-    margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);
+    margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);
   }
   .set-size-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .set-size-label{font-size:12.5px;color:var(--text-dim);}
   .add-set-btn{
     display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
-    padding:11px 14px;
+    padding:10px 14px;
     background:linear-gradient(180deg, #d4b05c 0%, var(--accent) 55%, #b8923f 100%);
     color:#1a1a1a;border:none;border-radius:8px;
-    font-size:13.5px;font-weight:700;cursor:pointer;
+    font-size:13px;font-weight:700;cursor:pointer;
     box-shadow:0 1px 0 rgba(255,255,255,.2) inset, 0 4px 12px rgba(201,162,75,.22);
     transition:filter .15s, box-shadow .15s;
   }
@@ -1054,6 +1073,13 @@
   }
   .set-separate-toggle:hover{color:var(--accent);}
   .card-set-pair:not(.separate-mode) .card-control{display:none;}
+
+  /* В separate-mode снова показываем мини-рамку вокруг контролов, не вокруг фото. */
+  .card-set-pair.separate-mode .card-set-items > .card .card-body{
+    padding:10px 8px 12px;
+    background:rgba(255,255,255,.03);
+    border-radius:0 0 8px 8px;
+  }
 
   @media (max-width:760px){
     .card-set-items{gap:8px;}
