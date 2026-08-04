@@ -109,20 +109,23 @@
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#1a1a1a">
+<meta name="theme-color" content="#161412">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#1a1a1a;
-    --bg-raised:#232323;
-    --bg-raised-2:#2a2a2a;
-    --line:#3a3a3a;
-    --text:#e0e0e0;
-    --text-dim:#9a9a9a;
+    /* Тёплый графит вместо холодного #1a1a1a — витрина, не админка. */
+    --bg:#161412;
+    --bg-raised:#1f1c19;
+    --bg-raised-2:#282420;
+    --line:#3a3530;
+    --text:#ebe6df;
+    --text-dim:#a89f94;
     --accent:#c9a24b;
     --accent-dim:#8f7736;
+    /* Студийный холст под фото: тёплый paper, не чистый #fff. */
+    --photo-well:#f3efe8;
     /* Витринный шрифт — только для крупных заголовков (пока: Hero). Inter остаётся
        рабочим шрифтом интерфейса везде, где он и был — карточки, формы, навигация.
        Контраст serif-заголовок / sans-интерфейс — по дизайн-аудиту сайта, этап 1. */
@@ -173,13 +176,13 @@
     padding-top:env(safe-area-inset-top, 0px);
     display:flex;align-items:center;justify-content:space-between;
     padding-left:28px;padding-right:28px;
-    background:rgba(26,26,26,.92);
+    background:rgba(22,20,18,.92);
     -webkit-backdrop-filter:blur(10px);
     backdrop-filter:blur(10px);
     border-bottom:1px solid var(--line);
     transition:height .25s ease, background .25s ease;
   }
-  .nav.scrolled{background:rgba(20,20,20,.96);}
+  .nav.scrolled{background:rgba(16,14,12,.96);}
 
   .nav-progress{
     position:fixed;top:0;left:0;z-index:101;height:2px;width:0%;
@@ -200,17 +203,17 @@
        "жирный" начерк вместо настоящего — выглядит хуже, чем честные 600. */
     font-weight:600;
     font-size:21px;
-    letter-spacing:.01em;
+    letter-spacing:.04em;
     color:#ffffff;
     text-transform:uppercase;
     transition:font-size .25s ease;
   }
   .nav.scrolled .logo-main{font-size:17px;}
   .logo-sub {
-    font-size:9.5px;
+    font-size:10px;
     font-weight:600;
-    letter-spacing:.18em;
-    color:#8a8a8a;
+    letter-spacing:.16em;
+    color:#a89f94;
     text-transform:uppercase;
     margin-top:4px;
     transition:opacity .2s ease, margin .2s ease;
@@ -270,184 +273,152 @@
   .burger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
 
   /* ===== HERO =====
-     Кинематографичный вариант: почти во весь экран, с медленно дрейфующим золотым
-     Aurora-фоном вместо плоского цвета, построчным появлением заголовка и живым
-     счётчиком товаров в каталоге (реальное число из rawItems, не выдумка — см.
-     animateHeroStats() в app.js). position:relative + overflow:hidden держат
-     блобы фона строго внутри Hero, не давая странице расти вширь. */
+     Editorial split: текст + доминантное фото изделия.
+     Aurora/facet сильно приглушены — фон не спорит с продуктом. */
   .hero{
     position:relative;
     overflow:hidden;
-    padding:150px 28px 0;
-    /* Запасной вариант — старые браузеры без поддержки svh просто проигнорируют
-       следующую строку и останутся на 100vh (обычная динамическая высота
-       вьюпорта), а не сломаются вовсе. */
+    padding:calc(var(--nav-height) + env(safe-area-inset-top, 0px) + 28px) 28px 48px;
     min-height:100vh;
     min-height:100svh;
     display:flex;
     align-items:center;
     justify-content:center;
-    text-align:center;
+    text-align:left;
     background:var(--bg);
   }
 
-  /* Aurora — еле заметна: низкая базовая непрозрачность блобов + собственное
-     появление с задержкой (aurora-appear, через ~2.2с после загрузки), а не
-     сразу на полную яркость. Должна "замечаться", а не бросаться в глаза.
-     inset:-10% и transition:transform — для очень лёгкого параллакса от мыши
-     (см. heroParallax в app.js): двигается весь слой целиком, отдельные блобы
-     при этом продолжают свой независимый дрейф собственной анимацией —
-     transform на родителе и transform-анимация на детях не конфликтуют. */
   .hero-aurora{
     position:absolute;inset:-10%;z-index:0;pointer-events:none;overflow:hidden;
-    opacity:0;animation:aurora-appear 1.2s ease 2.1s forwards;
+    opacity:0;animation:aurora-appear 1.2s ease 1.6s forwards;
     transition:transform .6s ease-out;
   }
-  @keyframes aurora-appear{to{opacity:1;}}
-  /* Раньше мягкость блобов давал filter:blur(70px) поверх radial-gradient — то есть
-     блюр по факту размывал уже мягкий край, который и так гаснет в прозрачность.
-     На среднем Android filter:blur — один из самых дорогих CSS-эффектов (полноэкранный
-     блюр-проход на каждый кадр анимации), а разница на глаз с чистым градиентом,
-     у которого стопы растянуты до 100%, минимальна. Убрали фильтр целиком, не только
-     на мобильных — эффект тот же, цена в разы меньше везде. */
+  @keyframes aurora-appear{to{opacity:.45;}}
   .hero-aurora .blob{
-    position:absolute;border-radius:50%;opacity:.3;
-    mix-blend-mode:screen;animation:aurora-drift 36s ease-in-out infinite;
+    position:absolute;border-radius:50%;opacity:.18;
+    mix-blend-mode:screen;animation:aurora-drift 48s ease-in-out infinite;
     will-change:transform;
   }
   .hero-aurora .b1{
     width:60vw;height:60vw;max-width:640px;max-height:640px;top:-18%;left:-10%;
-    background:radial-gradient(circle, rgba(201,162,75,.3), rgba(201,162,75,.06) 55%, transparent 100%);
+    background:radial-gradient(circle, rgba(201,162,75,.22), rgba(201,162,75,.04) 55%, transparent 100%);
   }
   .hero-aurora .b2{
     width:50vw;height:50vw;max-width:540px;max-height:540px;bottom:-22%;right:-8%;
-    background:radial-gradient(circle, rgba(201,162,75,.18), rgba(201,162,75,.04) 55%, transparent 100%);
-    animation-duration:42s;animation-delay:-10s;
+    background:radial-gradient(circle, rgba(201,162,75,.12), rgba(201,162,75,.03) 55%, transparent 100%);
+    animation-duration:56s;animation-delay:-10s;
   }
   @keyframes aurora-drift{
     0%,100%{transform:translate(0,0) scale(1);}
-    33%{transform:translate(4%,6%) scale(1.08);}
-    66%{transform:translate(-3%,-4%) scale(.96);}
+    33%{transform:translate(3%,4%) scale(1.05);}
+    66%{transform:translate(-2%,-3%) scale(.97);}
   }
 
-  /* Мягкий верхний блик — статичный, не двигается и не мигает; ощущение
-     "витрины под подсветкой", а не ещё один источник движения. */
-  /* "Дыхание света" — блик не статичен, его яркость очень медленно (8с) плывёт
-     вверх-вниз. Только opacity — дёшево для браузера, ничего не перекомпоновывает. */
   .hero-bloom{
     position:absolute;top:-24%;left:50%;transform:translateX(-50%);
     width:min(1000px,140vw);height:min(1000px,140vw);z-index:0;pointer-events:none;
-    background:radial-gradient(circle, rgba(255,241,214,.05), transparent 62%);
-    animation:bloom-breathe 8s ease-in-out infinite;
+    background:radial-gradient(circle, rgba(255,241,214,.035), transparent 62%);
+    animation:none;opacity:.7;
   }
   @keyframes bloom-breathe{0%,100%{opacity:.65;}50%{opacity:1;}}
 
-  /* Едва заметная вращающаяся грань света позади заголовка — как блик, скользящий
-     по грани камня. from/to с одинаковым набором функций transform (не просто
-     угол) — чтобы браузер не пытался хитро интерполировать между разными
-     наборами функций. Появляется с той же задержкой, что и Aurora — единый
-     момент "сцена оживает" через ~2 секунды, а не рывками по отдельности. */
-  .hero-facet{
-    position:absolute;top:50%;left:50%;
-    width:140vmax;height:140vmax;
-    transform:translate(-50%,-50%);
-    background:conic-gradient(from 0deg,
-      transparent 0deg, rgba(201,162,75,.05) 12deg, transparent 35deg,
-      transparent 180deg, rgba(201,162,75,.04) 195deg, transparent 220deg, transparent 360deg);
-    z-index:0;pointer-events:none;opacity:0;
-    animation:facet-rotate 100s linear infinite, facet-appear 1.4s ease 2.3s forwards;
-  }
+  .hero-facet{display:none;}
   @keyframes facet-rotate{
     from{transform:translate(-50%,-50%) rotate(0deg);}
     to{transform:translate(-50%,-50%) rotate(360deg);}
   }
   @keyframes facet-appear{to{opacity:1;}}
 
-  /* Шумовая текстура (film grain) — придаёт ощущение материала, а не плоской
-     цифровой заливки. Инлайн-SVG с feTurbulence, а не картинка: CSP сайта
-     (img-src) не разрешает произвольные data:-изображения, а инлайн-SVG в
-     разметке под это ограничение не подпадает — ничего в политике менять не
-     пришлось. Непрозрачность нарочно мала (3.5%) — эффект должен ощущаться,
-     а не считываться как "зерно на фото". */
-  /* width/height:100% обязательны отдельно от inset:0 — SVG как замещаемый
-     элемент (как <img>) без явного размера в разметке иначе остаётся при своём
-     дефолтном intrinsic-размере 300×150 вместо растяжения на весь блок; сам
-     обнаружил это при проверке, а не предположил. */
-  .hero-grain{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:.035;mix-blend-mode:overlay;}
+  .hero-grain{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:.02;mix-blend-mode:overlay;}
 
-  /* Чистая типография без фото — по отзыву варианты с картинкой (одиночное фото
-     в рамке, потом плавающая композиция из трёх украшений) не понравились.
-     Вернули изначальный, самый первый вариант: одна центрированная колонка. */
-  .hero-inner{position:relative;z-index:1;max-width:760px;padding-bottom:140px;}
+  .hero-stage{
+    position:relative;z-index:2;
+    width:100%;max-width:1180px;
+    display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+    gap:48px;align-items:center;
+  }
+  .hero-inner{position:relative;z-index:1;max-width:none;padding-bottom:0;}
 
+  .hero-visual{
+    position:relative;
+    border-radius:18px;
+    overflow:hidden;
+    background:var(--photo-well);
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 24px 60px rgba(0,0,0,.45);
+    aspect-ratio:1 / 1;
+    opacity:0;animation:fade-up .8s ease .2s forwards;
+  }
+  .hero-visual img{
+    width:100%;height:100%;object-fit:contain;
+    transform:scale(1.02);
+    transition:transform 12s ease-out;
+  }
+  .hero-visual:hover img{transform:scale(1.06);}
+  .hero-visual::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(160deg, transparent 55%, rgba(22,20,18,.12));
+  }
 
   .hero .eyebrow{
     display:inline-flex;align-items:center;gap:8px;
-    font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);font-weight:600;
-    padding:8px 18px;border:1px solid rgba(201,162,75,.35);border-radius:100px;
-    background:rgba(201,162,75,.07);
-    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+    font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600;
+    padding:0;border:none;border-radius:0;
+    background:none;
+    -webkit-backdrop-filter:none;backdrop-filter:none;
     opacity:0;animation:fade-up .6s ease forwards;
   }
   .hero h1{
     font-family:var(--font-display);
-    font-size:clamp(38px,6.4vw,76px);
+    font-size:clamp(36px,5.2vw,64px);
     font-weight:500;
     line-height:1.08;
-    margin-top:24px;
-    letter-spacing:-.01em;
+    margin-top:18px;
+    letter-spacing:-.015em;
     color:var(--text);
   }
   .hero h1 .word{
-    display:inline-block;opacity:0;transform:translateY(.4em);
-    animation:word-in .7s cubic-bezier(.2,.7,.2,1) forwards;
+    display:inline-block;opacity:0;transform:translateY(.35em);
+    animation:word-in .65s cubic-bezier(.2,.7,.2,1) forwards;
   }
-  .hero h1 .word:nth-of-type(1){animation-delay:.12s;}
-  .hero h1 .word:nth-of-type(2){animation-delay:.24s;}
-  .hero h1 .word:nth-of-type(3){animation-delay:.36s;}
-  .hero h1 .word:nth-of-type(4){animation-delay:.48s;}
+  .hero h1 .word:nth-of-type(1){animation-delay:.1s;}
+  .hero h1 .word:nth-of-type(2){animation-delay:.18s;}
+  .hero h1 .word:nth-of-type(3){animation-delay:.26s;}
+  .hero h1 .word:nth-of-type(4){animation-delay:.34s;}
   @keyframes word-in{to{opacity:1;transform:none;}}
   @keyframes fade-up{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
   .hero p{
-    max-width:540px;margin:26px auto 0;color:var(--text-dim);font-size:16.5px;
-    opacity:0;animation:fade-up .7s ease .6s forwards;
+    max-width:420px;margin:20px 0 0;color:var(--text-dim);font-size:16px;line-height:1.55;
+    opacity:0;animation:fade-up .7s ease .45s forwards;
   }
-  .hero-cta{margin-top:42px;opacity:0;animation:fade-up .7s ease .74s forwards;}
+  .hero-cta{margin-top:32px;opacity:0;animation:fade-up .7s ease .55s forwards;}
   .hero-btn{
     display:inline-flex;align-items:center;gap:10px;
-    padding:16px 32px;background:var(--accent);color:#1a1a1a;
-    font-weight:700;font-size:14.5px;border-radius:100px;
-    box-shadow:0 8px 24px rgba(201,162,75,.25);
+    padding:15px 28px;background:var(--accent);color:#1a1a1a;
+    font-weight:700;font-size:14px;border-radius:100px;
+    box-shadow:0 8px 24px rgba(201,162,75,.22);
     transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, background .2s ease;
-    animation:btn-breathe 6s ease-in-out infinite;
+    animation:none;
   }
-  /* Дыхание тени в покое — кнопка выглядит "живой" ещё до наведения. На hover
-     анимация ставится на паузу (не отключается), а transition выше подхватывает
-     переход от текущего замороженного кадра к hover-состоянию — без рывка. */
   @keyframes btn-breathe{
     0%,100%{box-shadow:0 8px 24px rgba(201,162,75,.18);}
     50%{box-shadow:0 10px 28px rgba(201,162,75,.32);}
   }
   .hero-btn:hover{
-    animation-play-state:paused;
-    transform:translateY(-2px);box-shadow:0 14px 34px rgba(201,162,75,.4);background:#dab863;
+    transform:translateY(-2px);box-shadow:0 14px 34px rgba(201,162,75,.35);background:#dab863;
   }
   .hero-btn:active{transform:translateY(0) scale(.98);}
   .hero-btn svg{transition:transform .25s ease;flex:none;}
   .hero-btn:hover svg{transform:translateX(4px);}
 
-  .hero-stats{
-    margin-top:64px;display:flex;justify-content:center;gap:56px;flex-wrap:wrap;
-    opacity:0;animation:fade-up .7s ease .88s forwards;
-  }
+  /* Stats вынесены из первого экрана — остаются в разметке скрытыми для JS-счётчика. */
+  .hero-stats{display:none;}
   .hero-stat{text-align:center;}
   .hero-stat-num{
     display:block;font-family:var(--font-display);font-size:28px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;
   }
-  /* Второй stat — не число, а слово ("Кострома"), поэтому чуть мельче: визуально
-     уравнивает длину строки с числом рядом, а не потому что менее значим. */
   .hero-stat-num-text{font-size:20px;}
   .hero-stat-label{
     display:block;margin-top:4px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
@@ -457,16 +428,31 @@
   .hero-divider{
     position:absolute;left:50%;bottom:0;transform:translateX(-50%);
     width:min(70%,560px);height:1px;z-index:1;
-    background:linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+    background:linear-gradient(90deg, transparent, rgba(201,162,75,.35), transparent);
   }
 
+  .hero-trust{
+    margin-top:28px;display:flex;flex-wrap:wrap;gap:16px 28px;
+    opacity:0;animation:fade-up .7s ease .65s forwards;
+  }
+  .hero-trust span{
+    font-size:12.5px;color:var(--text-dim);letter-spacing:.02em;
+  }
+  .hero-trust strong{color:var(--text);font-weight:600;}
+
+  @media (max-width:900px){
+    .hero{padding:calc(var(--nav-height) + 20px) 20px 40px;text-align:center;}
+    .hero-stage{grid-template-columns:1fr;gap:28px;}
+    .hero-inner{order:1;}
+    .hero-visual{order:0;max-width:420px;margin:0 auto;width:100%;}
+    .hero p{margin-left:auto;margin-right:auto;}
+    .hero-cta{display:flex;justify-content:center;}
+    .hero-trust{justify-content:center;}
+  }
   @media (max-width:480px){
-    .hero{padding:104px 16px 0;min-height:auto;}
-    .hero-inner{padding-bottom:56px;}
-    .hero .eyebrow{font-size:10px;padding:6px 14px;}
-    .hero-stats{gap:28px;margin-top:40px;}
-    .hero-stat-num{font-size:22px;}
-    .hero-stat-num-text{font-size:17px;}
+    .hero{padding:calc(var(--nav-height) + 12px) 16px 32px;min-height:auto;}
+    .hero .eyebrow{font-size:11px;}
+    .hero-visual{border-radius:14px;}
   }
 
   /* ===== LAYOUT ===== */
@@ -666,7 +652,7 @@
     /* 200px вместо 230px — чтобы на типичной desktop-ширине помещалось 4 карточки
        в ряд, а не 3 (по просьбе после того, как 230px в связке с max-width:1280px
        у .layout стабильно давал только 3). */
-    display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:22px;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:26px;
     /* Комплекты "Гарнитуры" занимают 2-3 колонки (grid-column:span), а обычные товары —
        одну. Без dense браузer расставляет карточки строго по порядку и оставляет пустую
        клетку там, где широкая карточка не влезла в остаток строки, вместо того чтобы
@@ -693,11 +679,11 @@
      при наведении даёт box-shadow (с оттенком золота — под общий стиль сайта, а не
      нейтрально-чёрная тень), а лёгкий zoom при наведении — только у самого <img>
      внутри .card-img, у которого таких потомков нет и transform ему ничем не грозит. */
-  .card:hover{border-color:var(--accent-dim);box-shadow:0 10px 28px rgba(201,162,75,.14), 0 4px 12px rgba(0,0,0,.35);}
+  .card:hover{border-color:rgba(201,162,75,.28);box-shadow:0 10px 28px rgba(0,0,0,.38);}
   .card-img{
     position:relative;
     aspect-ratio:1/1;
-    background:#ffffff;
+    background:var(--photo-well);
     display:flex;align-items:center;justify-content:center;overflow:hidden;
     cursor:zoom-in;
   }
@@ -707,10 +693,10 @@
   }
   .card-img img.loaded{opacity:1;}
   .card:hover .card-img img{transform:scale(1.04);}
-  /* Заглушка загрузки — светлая, в тон студийному белому фону фото. */
+  /* Заглушка загрузки — в тон paper-колодцу. */
   .card-img::before{
     content:"";position:absolute;inset:0;
-    background:linear-gradient(100deg, #f4f4f2 30%, #ffffff 50%, #f4f4f2 70%);
+    background:linear-gradient(100deg, #ebe6dc 30%, #f3efe8 50%, #ebe6dc 70%);
     background-size:200% 100%;
     animation:img-shimmer 1.4s ease-in-out infinite;
   }
@@ -947,9 +933,8 @@
   .card-ring-controls .size-picker-btn{min-width:64px;padding:5px 8px;}
 
   /* ===== "Гарнитуры": комплект в одной рамке =====
-     Рамка занимает 2 колонки внешней сетки.
-     align-self:start — не растягивать рамку по высоте соседа в сетке
-     (иначе у тройки с более низкими фото оставалась пустота над кнопками). */
+     Тише chrome: без золотой «витринной коробки». Пара = ширина двух третей
+     (те же thumbs, что у тройки). align-self:start — без пустоты от stretch. */
   .card-set-pair{
     position:relative;
     grid-column:span 2;
@@ -957,37 +942,28 @@
     height:auto;
     display:flex;
     flex-direction:column;
-    background:
-      radial-gradient(ellipse 90% 55% at 12% -10%, rgba(201,162,75,.14), transparent 58%),
-      radial-gradient(ellipse 70% 45% at 100% 110%, rgba(201,162,75,.07), transparent 55%),
-      linear-gradient(165deg, #2c2c2c 0%, #222222 42%, #1a1a1a 100%);
-    border:1px solid rgba(201,162,75,.28);
-    border-radius:12px;
-    padding:14px;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.045),
-      0 6px 22px rgba(0,0,0,.35);
+    background:var(--bg-raised);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,.28);
     transition:border-color .28s, box-shadow .28s, opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1);
   }
   .card-set-pair:hover{
-    border-color:rgba(201,162,75,.48);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.06),
-      0 12px 32px rgba(201,162,75,.12),
-      0 6px 18px rgba(0,0,0,.4);
+    border-color:rgba(201,162,75,.35);
+    box-shadow:0 12px 28px rgba(0,0,0,.36);
   }
   .card-set-head{
-    display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px;
+    display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:14px;
     flex:none;
   }
   .card-set-label{
-    display:inline-block;font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;
-    letter-spacing:.08em;padding:4px 10px;border-radius:100px;
-    background:rgba(201,162,75,.14);border:1px solid rgba(201,162,75,.32);
+    display:inline-block;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;
+    letter-spacing:.1em;padding:0;border-radius:0;
+    background:none;border:none;
   }
-  .card-set-weight{font-size:11.5px;color:var(--text-dim);}
+  .card-set-weight{font-size:12px;color:var(--text-dim);}
 
-  /* Галерея: 2 → две колонки, 3 → три, без пустой ячейки. */
   .card-set-items{
     display:grid;
     gap:12px;
@@ -995,7 +971,12 @@
     flex:none;
     width:100%;
   }
-  .card-set-items[data-count="2"]{grid-template-columns:repeat(2, minmax(0, 1fr));}
+  .card-set-items[data-count="2"]{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    width:calc((200% - 12px) / 3);
+    max-width:100%;
+    margin-inline:auto;
+  }
   .card-set-items[data-count="3"]{grid-template-columns:repeat(3, minmax(0, 1fr));}
   .card-set-items:not([data-count]){grid-template-columns:repeat(3, minmax(0, 1fr));}
 
@@ -1006,24 +987,24 @@
     box-sizing:border-box;
     display:flex;
     flex-direction:column;
-    background:rgba(255,255,255,.03);
-    border:1px solid rgba(255,255,255,.08);
+    background:transparent;
+    border:1px solid rgba(255,255,255,.07);
     border-radius:10px;
     box-shadow:none;
     overflow:hidden;
   }
   .card-set-items > .card:hover{
-    border-color:rgba(201,162,75,.35);
-    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    border-color:rgba(201,162,75,.3);
+    box-shadow:none;
   }
   .card-set-items .card-img{
     flex:none;
     aspect-ratio:1 / 1;
     width:100%;
     border-radius:0;
-    background:#ffffff;
+    background:var(--photo-well);
     border:none;
-    border-bottom:1px solid rgba(0,0,0,.06);
+    border-bottom:1px solid rgba(0,0,0,.05);
   }
   .card-set-items .card-img::before{
     border-radius:0;
@@ -1070,7 +1051,8 @@
 
   @media (max-width:760px){
     .card-set-items{gap:8px;}
-    .card-set-pair{padding:12px;border-radius:10px;}
+    .card-set-items[data-count="2"]{width:100%;}
+    .card-set-pair{padding:12px;border-radius:12px;}
   }
 
   @media (max-width:480px){
@@ -1155,31 +1137,36 @@
   .section-inner{max-width:1180px;margin:0 auto;padding:var(--space-section) 28px;}
   .section-head{max-width:640px;margin:0 auto 52px;text-align:center;}
   .section-head .eyebrow{
-    display:inline-block;font-size:11px;letter-spacing:.28em;text-transform:uppercase;
-    color:var(--accent);font-weight:600;margin-bottom:16px;
+    display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin-bottom:14px;
   }
   .section-head h2{font-family:var(--font-display);font-weight:500;font-size:var(--fs-h2);letter-spacing:-.005em;}
   .section-lead{margin-top:14px;color:var(--text-dim);font-size:15.5px;}
 
-  /* ===== Преимущества ===== */
-  .advantages-grid{
-    display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px;
+  /* ===== Преимущества / мастерская ===== */
+  .workshop{
+    display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+    gap:40px;align-items:center;
   }
-  .advantage-card{
-    background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;
-    padding:28px 24px;transition:border-color .25s, box-shadow .25s, transform .25s;
+  .workshop-visual{
+    border-radius:16px;overflow:hidden;background:var(--photo-well);
+    border:1px solid rgba(255,255,255,.07);aspect-ratio:4/5;
   }
-  .advantage-card:hover{
-    border-color:var(--accent-dim);transform:translateY(-3px);
-    box-shadow:0 14px 32px rgba(201,162,75,.14);
+  .workshop-visual img{width:100%;height:100%;object-fit:cover;}
+  .workshop-points{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:18px;}
+  .workshop-points li{
+    padding-left:18px;border-left:2px solid rgba(201,162,75,.45);
   }
-  .advantage-icon{
-    width:44px;height:44px;border-radius:10px;margin-bottom:18px;
-    display:flex;align-items:center;justify-content:center;
-    background:rgba(201,162,75,.1);border:1px solid rgba(201,162,75,.25);color:var(--accent);
+  .workshop-points h3{font-family:var(--font-display);font-weight:500;font-size:18px;margin-bottom:4px;}
+  .workshop-points p{font-size:14px;color:var(--text-dim);line-height:1.55;}
+  @media (max-width:900px){
+    .workshop{grid-template-columns:1fr;gap:28px;}
+    .workshop-visual{max-width:440px;margin:0 auto;aspect-ratio:1/1;}
   }
-  .advantage-card h3{font-family:var(--font-display);font-weight:500;font-size:var(--fs-h3);margin-bottom:8px;}
-  .advantage-card p{font-size:13.5px;color:var(--text-dim);line-height:1.6;}
+
+  .advantages-grid{display:none;}
+  .advantage-card{display:none;}
+  .advantage-icon{display:none;}
 
   /* ===== Как мы работаем ===== */
   /* Светящиеся линии сверху/снизу вместо сплошного border — тот же приём,
@@ -1248,6 +1235,7 @@
     display:grid;grid-template-columns:1.1fr 1fr;gap:56px;
     padding-bottom:40px;
   }
+  .footer-grid-single{grid-template-columns:1fr;max-width:560px;}
   .footer-heading{
     font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--accent);font-weight:700;margin-bottom:24px;
@@ -1356,7 +1344,7 @@
     .logo-main{font-size:18px;}
     .logo-sub{font-size:8.5px;}
     .main{padding:24px 16px 40px;}
-    .grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;}
     .card-body{padding:10px 10px 12px;}
     .card-weight{font-size:13.5px;}
     .toolbar{gap:10px;}
@@ -1407,9 +1395,10 @@
     .hero-facet{animation:none;opacity:1;}
     .hero-btn{animation:none;}
     .card-img::before{animation:none;}
-    .hero .eyebrow, .hero h1 .word, .hero p, .hero-cta, .hero-stats{
+    .hero .eyebrow, .hero h1 .word, .hero p, .hero-cta, .hero-stats, .hero-visual, .hero-trust{
       animation:none !important;opacity:1 !important;transform:none !important;
     }
+    .hero-visual img{transition:none !important;}
     .reveal{opacity:1 !important;transform:none !important;transition:none !important;}
     .ripple{display:none !important;}
     .nav, .nav-links a::after, .logo-main, .logo-sub,
@@ -1424,12 +1413,12 @@
 <div class="nav-progress" id="navProgress" aria-hidden="true"></div>
 <nav class="nav" id="mainNav">
   <div class="logo">
-    <div class="logo-main">ИП ВОРОНИН</div>
-    <div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
+    <div class="logo-main">ВОРОНИН</div>
+    <div class="logo-sub">Ювелирное производство</div>
   </div>
   <div class="nav-links">
-    <a href="#catalog">Каталог</a>
-    <a href="#about">О нас</a>
+    <a href="#catalog">Коллекции</a>
+    <a href="#about">Производство</a>
     <a href="#contacts">Контакты</a>
   </div>
   <div class="nav-actions">
@@ -1467,25 +1456,36 @@
     <filter id="heroGrain"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/></filter>
     <rect width="100%" height="100%" filter="url(#heroGrain)"/>
   </svg>
-  <div class="hero-inner">
-    <div class="eyebrow">ИП Воронин · Кострома</div>
-    <h1><span class="word">Ювелирные</span> <span class="word">изделия</span><br><span class="word">собственного</span> <span class="word">производства</span></h1>
-    <p>Кольца, серьги, цепи и другие украшения из золота и серебра. Актуальный каталог с артикулами и весом каждого изделия.</p>
-    <div class="hero-cta">
-      <a href="#catalog" class="hero-btn">
-        Смотреть каталог
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </a>
+  <div class="hero-stage">
+    <div class="hero-inner">
+      <div class="eyebrow">Кострома · собственное производство</div>
+      <h1><span class="word">Ювелирные</span> <span class="word">изделия</span><br><span class="word">с весом</span> <span class="word">и артикулом</span></h1>
+      <p>Кольца, серьги, гарнитуры и цепи из золота и серебра — актуальный каталог мастерской.</p>
+      <div class="hero-cta">
+        <a href="#catalog" class="hero-btn">
+          Смотреть каталог
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+      </div>
+      <div class="hero-trust">
+        <span><strong id="heroItemCount">0</strong> изделий</span>
+        <span>Доставка по России</span>
+        <span>Опт и заказ</span>
+      </div>
+      <!-- Скрытый блок для совместимости со старым JS-счётчиком (если вернём stats). -->
+      <div class="hero-stats" aria-hidden="true">
+        <div class="hero-stat">
+          <span class="hero-stat-num" id="heroItemCountLegacy">0</span>
+          <span class="hero-stat-label">изделий в каталоге</span>
+        </div>
+      </div>
     </div>
-    <div class="hero-stats">
-      <div class="hero-stat">
-        <span class="hero-stat-num" id="heroItemCount">0</span>
-        <span class="hero-stat-label">изделий в каталоге</span>
-      </div>
-      <div class="hero-stat">
-        <span class="hero-stat-num hero-stat-num-text">Кострома</span>
-        <span class="hero-stat-label">собственное производство</span>
-      </div>
+    <div class="hero-visual">
+      <picture>
+        <source type="image/avif" srcset="images/items1137-hd.avif">
+        <source type="image/webp" srcset="images/items1137-hd.webp">
+        <img src="images/items1137-hd.jpg" alt="Ювелирное изделие ИП Воронин" width="800" height="800" fetchpriority="high" decoding="async">
+      </picture>
     </div>
   </div>
   <div class="hero-divider" aria-hidden="true"></div>
@@ -1572,38 +1572,33 @@
      о производстве. -->
 <section class="advantages" id="about">
   <div class="section-inner">
-    <div class="section-head">
-      <div class="eyebrow">Почему выбирают нас</div>
-      <h2>Ювелирное производство полного цикла</h2>
-    </div>
-    <div class="advantages-grid">
-      <div class="advantage-card">
-        <div class="advantage-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 5-9 13L3 8Z"/><path d="M3 8h18"/><path d="m9 3 3 5-3 13"/><path d="m15 3-3 5 3 13"/></svg>
-        </div>
-        <h3>Собственное производство</h3>
-        <p>Каждое изделие изготавливается в мастерской в Костроме — мы не перекупаем, а делаем сами.</p>
+    <div class="workshop">
+      <div class="workshop-visual">
+        <picture>
+          <source type="image/webp" srcset="images/items1-hd.webp">
+          <img src="images/items1-hd.jpg" alt="Изделие мастерской Воронин" width="640" height="800" loading="lazy" decoding="async">
+        </picture>
       </div>
-      <div class="advantage-card">
-        <div class="advantage-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+      <div>
+        <div class="section-head" style="margin:0;text-align:left;max-width:none;">
+          <div class="eyebrow">Производство</div>
+          <h2>Мастерская полного цикла в Костроме</h2>
+          <p class="section-lead">Мы не перекупаем готовое — каждое изделие делается у нас: от идеи и веса до готовой передачи клиенту или магазину.</p>
         </div>
-        <h3>Индивидуальный подход</h3>
-        <p>Обсуждаем эскиз, вес и материал под конкретный заказ — для частного клиента или магазина.</p>
-      </div>
-      <div class="advantage-card">
-        <div class="advantage-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L18 8h-4v9h1"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="17.5" cy="17.5" r="1.5"/></svg>
-        </div>
-        <h3>Доставка по всей России</h3>
-        <p>Отправляем готовые изделия в любой регион страны.</p>
-      </div>
-      <div class="advantage-card">
-        <div class="advantage-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg>
-        </div>
-        <h3>Оптовое сотрудничество</h3>
-        <p>Работаем с магазинами и партнёрами на постоянной основе.</p>
+        <ul class="workshop-points">
+          <li>
+            <h3>Своё производство</h3>
+            <p>Кольца, серьги, гарнитуры и цепи изготавливаются в мастерской на ул. Коммунаров, 40.</p>
+          </li>
+          <li>
+            <h3>Под заказ и опт</h3>
+            <p>Частные заказы по эскизу и постоянное сотрудничество с магазинами.</p>
+          </li>
+          <li>
+            <h3>Доставка по России</h3>
+            <p>Отправляем готовые изделия в любой регион страны.</p>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
@@ -1671,10 +1666,10 @@
 <footer id="contacts">
   <div class="footer-inner">
     <div class="footer-brand">
-      <div class="footer-brand-main">ИП ВОРОНИН</div>
+      <div class="footer-brand-main">ВОРОНИН</div>
       <div class="footer-brand-sub">Ювелирное производство · Кострома</div>
     </div>
-    <div class="footer-grid">
+    <div class="footer-grid footer-grid-single">
       <div class="footer-col">
         <h3 class="footer-heading">Контакты</h3>
         <ul class="footer-list">
@@ -1713,36 +1708,6 @@
               <span class="footer-item-label">E-mail</span>
               <a class="footer-item-value footer-link" href="mailto:igor09042005@inbox.ru">igor09042005@inbox.ru</a>
             </span>
-          </li>
-        </ul>
-      </div>
-
-      <div class="footer-col">
-        <h3 class="footer-heading">Для клиентов</h3>
-        <ul class="footer-list footer-list-plain">
-          <li>
-            <span class="footer-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L18 8h-4v9h1"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="17.5" cy="17.5" r="1.5"/></svg>
-            </span>
-            <span class="footer-item-value">Доставка по всей России</span>
-          </li>
-          <li>
-            <span class="footer-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 5-9 13L3 8Z"/><path d="M3 8h18"/><path d="m9 3 3 5-3 13"/><path d="m15 3-3 5 3 13"/></svg>
-            </span>
-            <span class="footer-item-value">Изготовление ювелирных изделий на заказ</span>
-          </li>
-          <li>
-            <span class="footer-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg>
-            </span>
-            <span class="footer-item-value">Оптовое сотрудничество с магазинами и партнёрами</span>
-          </li>
-          <li>
-            <span class="footer-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
-            </span>
-            <span class="footer-item-value">Индивидуальный подход к каждому заказу</span>
           </li>
         </ul>
       </div>
