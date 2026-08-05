@@ -21,8 +21,10 @@
  *   /__/firebase/securetoken/*     — reverse-proxy → securetoken.googleapis.com
  *   /__/firebase/firestore/*       — reverse-proxy → firestore.googleapis.com
  *                  Нужны потому, что у части сетей в РФ *.googleapis.com / gstatic
- *                  недоступны без VPN. Браузер ходит только на workers.dev; до Google
- *                  дотягивается уже Cloudflare (см. config.js applyFirebaseProxies).
+ *                  недоступны без VPN. ВАЖНО: с июня 2025 многие РФ-провайдеры ещё и
+ *                  душат Cloudflare (~16 KB) — *.workers.dev и custom domain Worker
+ *                  без VPN тоже часто мертвы. Для РФ без VPN нужен Node-релей вне CF
+ *                  (папка relay-node/, DNS relay.voroninkostroma.ru) — см. SECURITY.md.
  *
  * Плюс один Cron Trigger (см. scheduled() и [triggers] в wrangler.toml):
  *   ежедневная автоочистка Корзины — товары /admin/ с deleted:true старше 30 дней
@@ -54,6 +56,19 @@ export default {
     const allowed = allowedOrigins(env);
     const corsOrigin = allowed.includes(origin) ? origin : allowed[0];
     const pathname = new URL(request.url).pathname;
+
+    // Liveness для клиента (ensureRelayReady). Не секретный: только { ok: true }.
+    if (pathname === "/health" || pathname === "/health/") {
+      const healthOrigin = allowed.includes(origin) ? origin : "*";
+      return new Response(JSON.stringify({ ok: true, via: "cloudflare-worker" }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": healthOrigin,
+          "Cache-Control": "no-store"
+        }
+      });
+    }
 
     // Auth/Firestore proxy — GET+POST (long polling), чужой Origin не пускаем (open proxy).
     if (pathname.startsWith("/__/firebase/")) {

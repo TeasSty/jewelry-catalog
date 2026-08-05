@@ -1,4 +1,6 @@
-import { firebaseConfig, firebaseSdkUrl, applyFirebaseProxies } from "./config.js";
+import { firebaseConfig, firebaseSdkUrl, applyFirebaseProxies, ensureRelayReady } from "./config.js";
+
+await ensureRelayReady();
 
 const [{ initializeApp }, authMod] = await Promise.all([
   import(firebaseSdkUrl("firebase-app.js")),

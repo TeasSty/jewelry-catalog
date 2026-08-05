@@ -1,7 +1,7 @@
   // Firebase НЕ импортируем статически с gstatic: у части клиентов (блокировки ISP
   // в РФ, DNS, AdBlock) модуль не грузится — и тогда ПАДАЕТ ВЕСЬ app.js. Каталог
   // должен открываться без Google. SDK — с /vendor/, API — через воркер-прокси.
-  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies } from "./config.js";
+  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies, ensureRelayReady } from "./config.js";
 
   let db = null;
   let auth = null;
@@ -31,6 +31,10 @@
     "Сервис входа временно недоступен (нет связи с сервером авторизации). Каталог можно смотреть — попробуйте войти позже или с другой сети.";
 
   async function initFirebase() {
+    // Сначала живой релей (RU VPS → workers.dev → прямой Google). Без VPN
+    // workers.dev/Cloudflare часто недоступен — нужен relay.voroninkostroma.ru.
+    await ensureRelayReady();
+
     const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
       import(firebaseSdkUrl("firebase-app.js")),
       import(firebaseSdkUrl("firebase-firestore-lite.js")),
@@ -39,9 +43,8 @@
 
     const app = initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
-    // Auth + Firestore через Cloudflare Worker: браузер не ходит на *.googleapis.com
-    // (у части сетей в РФ без VPN эти хосты недоступны). Firestore lite — только REST,
-    // без WebChannel/Listen: полный SDK через reverse-proxy давал пустые списки.
+    // Auth + Firestore через релей, если он ответил /health. Иначе — прямые Google-хосты.
+    // Firestore lite — только REST (полный SDK + WebChannel через прокси давал пустые списки).
     const fsSettings = applyFirebaseProxies(auth);
     db = firestoreMod.initializeFirestore(app, fsSettings);
 

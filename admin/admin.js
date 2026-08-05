@@ -1,4 +1,4 @@
-  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies } from "../config.js";
+  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies, ensureRelayReady } from "../config.js";
 
   // Панель не должна открываться внутри чужого <iframe>: иначе посторонний сайт может
   // накрыть её прозрачным слоем и подловить клик по "Удалить" (кликджекинг). Полноценно
@@ -36,8 +36,9 @@
     checking.style.display = "block";
     checking.innerHTML =
       "Не удалось связаться с сервером авторизации.<br>" +
-      "Обновите страницу. Если ошибка повторяется — отключите блокировщик рекламы " +
-      "для этого сайта и попробуйте другой браузер.<br><br>" +
+      "Без VPN нужен релей на <code>relay.voroninkostroma.ru</code> " +
+      "(VPS вне Cloudflare — см. relay-node/README.md). " +
+      "Обновите страницу; при необходимости отключите блокировщик рекламы.<br><br>" +
       "<button type=\"button\" id=\"firebaseRetryBtn\" style=\"width:auto;margin-top:8px;\">Повторить</button>" +
       "<br><small style=\"color:#9a9a9a\">" + (err && err.message ? err.message : String(err)) + "</small>";
     const btn = document.getElementById("firebaseRetryBtn");
@@ -49,6 +50,7 @@
   let collection, doc, getDoc, setDoc, deleteDoc, deleteField, getDocs, query, where, orderBy, limit, updateDoc, serverTimestamp;
 
   try {
+    await withTimeout(ensureRelayReady(), 8000, "Relay probe");
     const [appMod, authMod, fsMod] = await withTimeout(Promise.all([
       import(firebaseSdkUrl("firebase-app.js")),
       import(firebaseSdkUrl("firebase-auth.js")),
@@ -56,7 +58,7 @@
     ]), 10000, "Firebase SDK load");
     app = appMod.initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
-    // Сразу на прокси воркера — до onAuthStateChanged / signIn.
+    // Релей (RU VPS / workers.dev) или прямой Google — до onAuthStateChanged / signIn.
     const fsSettings = applyFirebaseProxies(auth);
     signInWithEmailAndPassword = authMod.signInWithEmailAndPassword;
     signOut = authMod.signOut;

@@ -6,7 +6,8 @@
 
 1. **Секретных ключей в коде сайта быть не может.** Не «спрятать поглубже», не
    «обфусцировать» — не может в принципе. Все секреты живут в Cloudflare Worker
-   (папка `worker/`), браузер обращается к нему и предъявляет токен входа Firebase.
+   (папка `worker/`) и/или в `.env` у Node-релея (`relay-node/`). Браузер обращается
+   к релею и предъявляет токен входа Firebase.
 2. **Клиентские проверки — только для удобства.** Настоящие ограничения задаются
    в `firestore.rules` и в воркере. Кнопку в браузере можно нажать в обход интерфейса,
    правило Firestore — нельзя.
@@ -60,22 +61,50 @@
 
 ---
 
+## Почему без VPN «не работает» (диагноз 2025–2026)
+
+Две независимые блокировки у части сетей в РФ:
+
+1. **Google** — `*.googleapis.com`, `gstatic.com`, часто `*.firebaseapp.com`.
+2. **Cloudflare** — с июня 2025 многие ISP душат трафик CF примерно до **16 KB**
+   на соединение ([официальный пост Cloudflare](https://blog.cloudflare.com/russian-internet-users-are-unable-to-access-the-open-internet/)).
+   Под удар попадают и `*.workers.dev`, и Worker на **кастомном** домене
+   (терминация всё равно на IP Cloudflare).
+
+Сайт на GitHub Pages (Fastly) при этом открывается. SDK лежит в `vendor/`.
+Но Auth/Firestore/заказы/админка ходят на релей → если релей на Cloudflare,
+без VPN он недоступен, и прокси «молчит». VPN открывает и Google, и CF — поэтому
+«с VPN работает».
+
+**Кастомный домен Worker на Cloudflare эту проблему не лечит.**
+Нужен релей **вне** Cloudflare: папка `relay-node/`, DNS `relay.voroninkostroma.ru`
+(A → IP VPS в reg.ru). Полная инструкция: `relay-node/README.md`.
+
+Клиент (`config.js`) сам пробует по порядку:
+`relay.voroninkostroma.ru` → `workers.dev` → прямой Google.
+
+Firebase Console → Authentication → **Authorized domains** должен содержать
+`voroninkostroma.ru` (сейчас `authDomain` в `config.js` указывает на него).
+
+---
+
 ## Как поднять воркер
 
-Воркер (`worker/index.js`) — единственное место с секретами и **прокси Firebase**.
-Маршруты:
+Воркер (`worker/index.js`) — запасной релей (VPN / заграница) + cron автоочистки.
+Для РФ **без VPN** основной путь — `relay-node/` (см. выше).
 
+Маршруты (одинаковые у Worker и Node-релея):
+
+- `GET /health` — проверка живости (для `ensureRelayReady` в `config.js`)
 - `POST /notify` — уведомление о заказе в Telegram
 - `POST /upload` — загрузка фото на ImgBB
 - `/__/firebase/identitytoolkit/*` → `identitytoolkit.googleapis.com` (Auth)
 - `/__/firebase/securetoken/*` → `securetoken.googleapis.com` (обновление токена)
 - `/__/firebase/firestore/*` → `firestore.googleapis.com` (база)
 
-Прокси нужен потому, что у части сетей в РФ `*.googleapis.com` и `gstatic.com`
-недоступны без VPN. Браузер ходит только на `*.workers.dev`; до Google дотягивается
-Cloudflare. SDK Firebase лежит локально в `vendor/firebase/` (не грузится с gstatic).
-Сайт и `/admin/` используют **Firestore Lite** (только REST `/v1/...` через этот
-прокси). Полный SDK с WebChannel/Listen через Worker ненадёжен — вход мог
+SDK Firebase лежит локально в `vendor/firebase/` (не грузится с gstatic).
+Сайт и `/admin/` используют **Firestore Lite** (только REST `/v1/...` через релей).
+Полный SDK с WebChannel/Listen через reverse-proxy ненадёжен — вход мог
 работать, а списки заказов/товаров выглядеть пустыми.
 
 **После изменения `worker/index.js` обязательно:**
@@ -85,8 +114,7 @@ cd worker
 wrangler deploy
 ```
 
-Без деплоя воркера сайт на GitHub Pages обновится, но прокси не заработает — вход
-и админка снова упрутся в блокировку Google.
+Без деплоя воркера сайт на GitHub Pages обновится, но CF-прокси не обновится.
 
 Полная установка с нуля:
 
@@ -101,21 +129,24 @@ wrangler deploy
 ```
 
 После `wrangler deploy` вы получите адрес вида
-`https://voronin-relay.ВАШ-АККАУНТ.workers.dev`. Его нужно прописать **в трёх местах**:
+`https://voronin-relay.ВАШ-АККАУНТ.workers.dev`. Его нужно прописать **в трёх местах**
+(и рядом — `https://relay.voroninkostroma.ru` для RU VPS):
 
-1. `config.js` → `export const RELAY_URL = "https://..."`
+1. `config.js` → массив `RELAY_CANDIDATES`
 2. `index.html` → в `connect-src` внутри `Content-Security-Policy`
 3. `admin/index.html` (и `auth-action.html`) → там же в `connect-src`
 
-Без пункта 2 и 3 браузер заблокирует запрос — политика безопасности не пускает на адреса,
+Без пунктов 2 и 3 браузер заблокирует запрос — политика безопасности не пускает на адреса,
 которых нет в белом списке.
 
-Проверьте `ALLOWED_ORIGIN` в `worker/wrangler.toml`: там перечисляются домены, с которых
-воркер принимает запросы (через запятую). Сейчас это `https://voroninkostroma.ru`,
-`https://www.voroninkostroma.ru` и `https://teassty.github.io` (зеркало GitHub Pages).
+Проверьте `ALLOWED_ORIGIN` в `worker/wrangler.toml` (и в `.env` у `relay-node/`): там
+перечисляются домены, с которых релей принимает запросы. Сейчас это
+`https://voroninkostroma.ru`, `https://www.voroninkostroma.ru` и
+`https://teassty.github.io` (зеркало GitHub Pages).
 
-Пока `RELAY_URL` пустой, каталог открывается, но вход/заказ/админка без прокси
-на «заблокированных» сетях не заработают. Загрузка нового фото в панели покажет
+Пока ни один кандидат из `RELAY_CANDIDATES` не отвечает на `/health`, клиент пробует
+прямой Google (удобно при VPN). На сетях с блокировкой Google без RU-релея
+вход/заказ/админка не заработают. Загрузка нового фото в панели покажет
 понятную ошибку, пока не задан `IMGBB_API_KEY`.
 
 ---
