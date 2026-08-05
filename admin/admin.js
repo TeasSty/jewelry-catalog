@@ -1,21 +1,3 @@
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-  import {
-    initializeFirestore,
-    collection,
-    doc,
-    getDoc,
-    setDoc,
-    deleteDoc,
-    deleteField,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    limit,
-    updateDoc,
-    serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   import { firebaseConfig, relayUrl } from "../config.js";
 
   // Панель не должна открываться внутри чужого <iframe>: иначе посторонний сайт может
@@ -28,15 +10,52 @@
     throw new Error("Панель администратора не работает во фрейме");
   }
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  // Автоопределение вместо жёсткого длинного опроса — та же причина, что и в app.js:
-  // через VPN/прокси потоковое соединение Firestore часто не поднимается, и панель
-  // падала на проверке прав ("Не удалось проверить права администратора"), хотя сам вход
-  // при этом проходил. Но принудительный опрос ощутимо медленнее (у каждого запроса
-  // отдельная накладная, а не общий канал) даже там, где он не нужен — SDK сам проверяет
-  // при подключении, работает ли быстрый канал, и переходит на опрос только если нет.
-  const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  // Firebase грузим динамически: при статическом import с gstatic весь модуль
+  // молча не стартует на части сетей/устройств — экран «Проверяем сессию…» вечный.
+  // Панели без Firebase нет, но ошибку нужно показать явно.
+  let app, auth, db;
+  let signInWithEmailAndPassword, signOut, onAuthStateChanged;
+  let collection, doc, getDoc, setDoc, deleteDoc, deleteField, getDocs, query, where, orderBy, limit, updateDoc, serverTimestamp;
+
+  try {
+    const [appMod, authMod, fsMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js")
+    ]);
+    app = appMod.initializeApp(firebaseConfig);
+    auth = authMod.getAuth(app);
+    signInWithEmailAndPassword = authMod.signInWithEmailAndPassword;
+    signOut = authMod.signOut;
+    onAuthStateChanged = authMod.onAuthStateChanged;
+    collection = fsMod.collection;
+    doc = fsMod.doc;
+    getDoc = fsMod.getDoc;
+    setDoc = fsMod.setDoc;
+    deleteDoc = fsMod.deleteDoc;
+    deleteField = fsMod.deleteField;
+    getDocs = fsMod.getDocs;
+    query = fsMod.query;
+    where = fsMod.where;
+    orderBy = fsMod.orderBy;
+    limit = fsMod.limit;
+    updateDoc = fsMod.updateDoc;
+    serverTimestamp = fsMod.serverTimestamp;
+    // В админке принудительный long polling: через VPN/прокси из РФ WebChannel
+    // часто рвётся — панель «не работает» при живом входе. Скорость вторична.
+    db = fsMod.initializeFirestore(app, { experimentalForceLongPolling: true });
+  } catch (err) {
+    console.error("Не удалось загрузить Firebase для админки:", err);
+    const checking = document.getElementById("authChecking");
+    if (checking) {
+      checking.style.display = "block";
+      checking.innerHTML =
+        "Не удалось связаться с сервером авторизации (Firebase). " +
+        "Проверьте интернет, отключите VPN/блокировщик и обновите страницу.<br><br>" +
+        "<small style=\"color:#9a9a9a\">" + (err && err.message ? err.message : String(err)) + "</small>";
+    }
+    throw err;
+  }
 
   const CATEGORY_NAMES = {
     koltsa: "Кольца", obruch: "Обручальные", sergi: "Серьги", garnitury: "Гарнитуры",
@@ -156,9 +175,9 @@
     const subSelect = document.getElementById("subcategory");
     subSelect.innerHTML = '<option value="">Без подкатегории</option>';
 
-    // Object.hasOwn, а не просто subcatMap[cat]: иначе значение вроде "constructor"
-    // достало бы что-то из прототипа Object вместо списка подкатегорий.
-    if(Object.hasOwn(subcatMap, cat)) {
+    // Object.prototype.hasOwnProperty.call — Object.hasOwn нет в Safari < 15.4,
+    // из‑за этого на части iPhone панель падала при смене категории.
+    if(Object.prototype.hasOwnProperty.call(subcatMap, cat)) {
       subcatMap[cat].forEach(sub => {
         subSelect.innerHTML += `<option value="${escapeHtml(sub)}">${escapeHtml(sub)}</option>`;
       });

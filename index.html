@@ -143,7 +143,10 @@
     --space-section:clamp(64px,9vw,120px);
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  html{scroll-behavior:smooth;}
+  /* НЕ ставим scroll-behavior:smooth на html: window.scrollTo()/программный
+     скролл (каталог после выбора категории, снятие lock сайдбара) тогда тоже
+     становится «плывущим» и на части телефонов залипает или дерётся с DOM. */
+  html{scroll-behavior:auto;}
   /* Клавиатурный фокус — golden, а не браузерный синий по умолчанию: на графите
      он слился бы с фоном хуже, чем на светлом сайте. Ссылки/поля со своим
      собственным focus-стилем (например .search-wrap input) не задеты — правило
@@ -1336,16 +1339,19 @@
     .overlay.show{display:block;}
     .main{padding-bottom:48px;}
   }
-  /* Блокировка скролла фона при открытом меню: position:fixed на body
-     (а не overflow:hidden на html/body) — на части мобильных браузеров
-     (в т.ч. Яндекс) overflow:hidden ломал прокрутку самого списка категорий
-     внутри сайдбара. top:-scrollY запоминает позицию, closeSidebarMobile
-     возвращает её через scrollTo. */
-  body.sidebar-open{
-    position:fixed;
-    left:0;right:0;
-    width:100%;
-    overflow:hidden;
+  /* Блокировка скролла фона при открытом меню — ТОЛЬКО на мобильной ширине.
+     position:fixed на body (не overflow:hidden на html/body): на Яндекс.Браузере
+     overflow:hidden ломал прокрутку списка категорий в сайдбаре.
+     top:-scrollY запоминает позицию; unlockBodyScroll возвращает её. */
+  @media (max-width:900px){
+    body.sidebar-open{
+      position:fixed;
+      left:0;right:0;
+      width:100%;
+      overflow:hidden;
+      /* iOS: без этого фон иногда продолжает «тянуться» под меню */
+      overscroll-behavior:none;
+    }
   }
   @media (max-width:480px){
     :root{--nav-height:68px;}
@@ -1841,7 +1847,7 @@
 </div>
 
 <!-- ?v= — сброс HTTP-кэша у клиентов со старой оболочкой (GitHub Pages max-age=600) -->
-<script type="module" src="app.js?v=20260804c"></script>
+<script type="module" src="app.js?v=20260805a"></script>
 
 </body>
 </html>

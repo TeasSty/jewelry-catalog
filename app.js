@@ -495,10 +495,42 @@
   // 1) Пока body.sidebar-open (position:fixed; top:-Y), замерить целевой Y каталога
   //    в координатах страницы: rect.top + lockY.
   // 2) Снять лок БЕЗ scrollTo(lockY) — иначе снова Hero (баг на мобильных).
-  // 3) Сразу window.scrollTo на каталог (не scrollIntoView: при снятии fixed
-  //    браузер сначала кидает scrollY в 0, и smooth/scrollIntoView иногда
-  //    «не догоняет»).
+  // 3) Сразу МГНОВЕННЫЙ scrollTo на каталог (не smooth: CSS/браузер иначе
+  //    «плывут» и на телефонах скролл залипает).
   // 4) Отрисовать сетку и ещё раз подправить Y после смены высоты DOM.
+  function scrollToInstant(y){
+    const top = Math.max(0, y);
+    // behavior:'instant' — явный мгновенный скролл (новый стандарт). Fallback
+    // на временно отключённый CSS scroll-behavior, затем scrollTo без options.
+    try {
+      window.scrollTo({ top, left: 0, behavior: "instant" });
+      return;
+    } catch (_) {}
+    const root = document.documentElement;
+    const prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollTo(0, top);
+    root.style.scrollBehavior = prev;
+  }
+
+  function unlockBodyScroll(restoreY){
+    if (!document.body.classList.contains("sidebar-open") && !document.body.style.top) {
+      if (typeof restoreY === "number") scrollToInstant(restoreY);
+      return;
+    }
+    document.body.classList.remove("sidebar-open");
+    document.body.style.top = "";
+    document.body.style.position = "";
+    document.body.style.width = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.overflow = "";
+    // Force reflow before scroll — иначе iOS/Yandex иногда оставляют body
+    // «залипшим» (скролл не отвечает, пока не тапнешь).
+    void document.body.offsetHeight;
+    if (typeof restoreY === "number") scrollToInstant(restoreY);
+  }
+
   function scrollThenRenderGrid(){
     const catalog = document.getElementById("catalog");
     const side = document.getElementById("sidebar");
@@ -520,13 +552,12 @@
       if (ov) ov.classList.remove("show");
       if (burger) burger.classList.remove("open");
       if (locked) {
-        document.body.classList.remove("sidebar-open");
-        document.body.style.top = "";
-        // намеренно НЕ делаем scrollTo(sidebarScrollLockY)
+        // Снимаем лок БЕЗ возврата к lockY — сразу прыгнем на каталог
+        unlockBodyScroll(null);
       }
     }
 
-    window.scrollTo(0, targetY);
+    scrollToInstant(targetY);
     renderGrid();
     requestAnimationFrame(() => {
       const y = Math.max(
@@ -536,7 +567,7 @@
           scrollMargin
       );
       if (Math.abs((window.scrollY || document.documentElement.scrollTop) - y) > 2) {
-        window.scrollTo(0, y);
+        scrollToInstant(y);
       }
     });
   }
@@ -1015,53 +1046,9 @@
   })();
 
   // ===== Небольшой докат по инерции после остановки колеса =====
-  // Обе предыдущие версии перехватывали сам скролл (preventDefault) и вели его
-  // сами — из-за этого он либо тянулся вязко, либо просто ощущался "не своим".
-  // Здесь по-другому: сам скролл во время движения колеса остаётся ПОЛНОСТЬЮ
-  // нативным (passive:true, preventDefault не вызывается вообще — "как будто
-  // я скролю" в чистом виде). Единственное добавление — короткий, маленький
-  // докат ПОСЛЕ того, как колесо перестало крутиться (100мс без новых wheel-
-  // событий), похожий на инерцию тачпада: несколько кадров быстро затухающего
-  // scrollBy, максимум ~50-60px, а не отдельная "поездка".
-  //
-  // Сайдбар/корзина/модалки (своя прокрутка через overflow) исключены явно.
-  // При reduce-motion не включается вовсе.
-  (function initScrollMomentumTail(){
-    if (reduceMotion.matches) return;
-    const noInterceptSelector = ".sidebar, .cart-panel-body, .modal-box";
-    let lastDeltaY = 0;
-    let idleTimer = null;
-    let coastId = null;
-
-    function stopCoast(){
-      if (coastId) { cancelAnimationFrame(coastId); coastId = null; }
-    }
-
-    function startCoast(){
-      const sign = lastDeltaY > 0 ? 1 : -1;
-      // Старт всегда небольшой и почти не зависит от силы прокрутки — это
-      // именно "довесок", а не продолжение того же движения в том же масштабе.
-      let v = sign * Math.min(15, Math.abs(lastDeltaY) * 0.15);
-      let steps = 0;
-      function tick(){
-        if (Math.abs(v) < 0.3 || steps++ > 12) { coastId = null; return; }
-        window.scrollBy(0, v);
-        v *= 0.75;
-        coastId = requestAnimationFrame(tick);
-      }
-      coastId = requestAnimationFrame(tick);
-    }
-
-    window.addEventListener("wheel", (e) => {
-      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      if (e.target.closest(noInterceptSelector)) return;
-      // preventDefault нет намеренно — сам скролл нативный от начала до конца
-      stopCoast();
-      lastDeltaY = e.deltaY;
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(startCoast, 100);
-    }, { passive: true });
-  })();
+  // ОТКЛЮЧЁН: кастомный coast через scrollBy на части устройств давал
+  // «залипание» скролла (особенно вместе с lock сайдбара и smooth CSS).
+  // Нативный скролл браузера/тачпада достаточный.
 
   document.getElementById("productGrid").addEventListener("click", (e) => {
     // Пикер размера в карточке каталога — выбирается ДО добавления в корзину, а не только
@@ -1281,8 +1268,9 @@
   // Блокируем скролл фона через position:fixed на body (см. body.sidebar-open в
   // CSS), а не через overflow:hidden на html/body: прошлый вариант на Яндекс.Браузере
   // ломал прокрутку самого списка категорий внутри сайдбара. top:-Y запоминает
-  // позицию страницы, при закрытии возвращаем её scrollTo.
+  // позицию страницы, при закрытии возвращаем её через unlockBodyScroll.
   function openSidebarMobile(){
+    if (window.innerWidth > 900) return;
     sidebarScrollLockY = window.scrollY || document.documentElement.scrollTop;
     sidebar.classList.add("open");
     overlay.classList.add("show");
@@ -1295,11 +1283,7 @@
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
     burgerBtn.classList.remove("open");
-    if (document.body.classList.contains("sidebar-open")) {
-      document.body.classList.remove("sidebar-open");
-      document.body.style.top = "";
-      window.scrollTo(0, sidebarScrollLockY);
-    }
+    unlockBodyScroll(sidebarScrollLockY);
   }
 
   burgerBtn.addEventListener("click", () => {
@@ -1311,18 +1295,25 @@
   });
   overlay.addEventListener("click", closeSidebarMobile);
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 900 && sidebar.classList.contains("open")) {
-      // closeSidebarMobile при width>900 сразу return — снимаем лок вручную.
+    if (window.innerWidth > 900 && (sidebar.classList.contains("open") || document.body.classList.contains("sidebar-open"))) {
       sidebar.classList.remove("open");
       overlay.classList.remove("show");
       burgerBtn.classList.remove("open");
-      if (document.body.classList.contains("sidebar-open")) {
-        document.body.classList.remove("sidebar-open");
-        document.body.style.top = "";
-        window.scrollTo(0, sidebarScrollLockY);
-      }
+      unlockBodyScroll(sidebarScrollLockY);
     }
   }, { passive:true });
+
+  // Страховка: если класс lock остался, а меню уже закрыто (гонка/bfcache) —
+  // снимаем, иначе скролл «залипает» навсегда.
+  function repairStuckScrollLock(){
+    if (document.body.classList.contains("sidebar-open") && !sidebar.classList.contains("open")) {
+      unlockBodyScroll(sidebarScrollLockY);
+    }
+  }
+  window.addEventListener("pageshow", repairStuckScrollLock);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") repairStuckScrollLock();
+  });
 
   // CSS scroll-behavior:smooth не везде срабатывает (например, если в системе включена
   // экономия анимаций) — прокручиваем вручную через JS, так стабильнее на всех браузерах
@@ -2156,6 +2147,7 @@
   document.addEventListener("keydown", (e) => {
     if(e.key === "Escape"){
       document.querySelectorAll(".modal-overlay.show").forEach(o => o.classList.remove("show"));
+      if (sidebar && sidebar.classList.contains("open")) closeSidebarMobile();
     }
   });
 

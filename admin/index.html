@@ -9,6 +9,27 @@
        что реально успевает до восстановления скролла браузером при reload. -->
   <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
   <script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
+  <!-- Сброс старого PWA Service Worker (тот же, что ломал витрину на части устройств) -->
+  <script>
+  (function(){
+    var FLAG = "voronin_sw_purge_v3";
+    var alreadyPurged = false;
+    try { alreadyPurged = !!sessionStorage.getItem(FLAG); } catch (e) {}
+    if (!("serviceWorker" in navigator)) return;
+    var wasControlled = !!navigator.serviceWorker.controller;
+    var done = function(){
+      try { sessionStorage.setItem(FLAG, "1"); } catch (e) {}
+      if (wasControlled && !alreadyPurged) location.reload();
+    };
+    var clearCaches = (typeof caches !== "undefined" && caches.keys)
+      ? caches.keys().then(function(keys){ return Promise.all(keys.map(function(k){ return caches.delete(k); })); })
+      : Promise.resolve();
+    var unreg = navigator.serviceWorker.getRegistrations().then(function(regs){
+      return Promise.all(regs.map(function(r){ return r.unregister(); }));
+    });
+    Promise.all([unreg, clearCaches]).then(done).catch(done);
+  })();
+  </script>
   <script src="../scroll-restore.js"></script>
 
   <!-- Пояснение к политике — см. index.html. Отличия для панели:
@@ -417,6 +438,20 @@
      затем на 10 секунд переключились в "Заказы" — таймер и тост не должны пропасть). -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-<script type="module" src="admin.js"></script>
+<script type="module" src="admin.js?v=20260805a"></script>
+<script>
+/* Если модуль/Firebase не поднялись — не оставляем вечное «Проверяем сессию…» */
+setTimeout(function () {
+  var checking = document.getElementById("authChecking");
+  var auth = document.getElementById("authContainer");
+  var admin = document.getElementById("adminInterface");
+  if (!checking) return;
+  if (checking.style.display === "none") return;
+  if (admin && admin.style.display === "block") return;
+  if (auth && auth.style.display === "block") return;
+  checking.innerHTML =
+    "Панель долго не отвечает. Обновите страницу. Если не помогло — откройте в Chrome/Яндекс без VPN, очистите данные сайта для voroninkostroma.ru.";
+}, 15000);
+</script>
 </body>
 </html>
