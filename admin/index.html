@@ -34,21 +34,24 @@
 
   <!-- Пояснение к политике — см. index.html. Отличия для панели:
        blob: в img-src нужен для превью выбранного фото до его отправки (URL.createObjectURL),
-       адрес воркера в connect-src — для загрузки фото через /upload. Когда пропишете
-       RELAY_URL в config.js, допишите его сюда в connect-src. -->
+       адрес воркера в connect-src — для /upload и Firebase-прокси (/__/firebase/*).
+       SDK грузится с /vendor/ (script-src 'self'), gstatic больше не нужен. -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     base-uri 'none';
     object-src 'none';
     form-action 'none';
-    script-src 'self' https://www.gstatic.com;
+    script-src 'self';
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src https://fonts.gstatic.com;
     img-src 'self' blob: https://i.ibb.co;
-    connect-src 'self' https://*.googleapis.com https://voronin-relay.gwho12345678.workers.dev;
+    connect-src 'self' https://voronin-relay.gwho12345678.workers.dev;
     frame-src https://voronin-jewelry.firebaseapp.com;
     upgrade-insecure-requests">
   <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
 
   <title>Панель управления каталогом</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -438,7 +441,7 @@
      затем на 10 секунд переключились в "Заказы" — таймер и тост не должны пропасть). -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-<script type="module" src="admin.js?v=20260805b"></script>
+<script type="module" src="admin.js?v=20260805c"></script>
 <script>
 /* Если модуль/Firebase не поднялись — не оставляем вечное «Проверяем сессию…» */
 setTimeout(function () {
@@ -450,8 +453,10 @@ setTimeout(function () {
   if (admin && admin.style.display === "block") return;
   if (auth && auth.style.display === "block") return;
   checking.innerHTML =
-    "Панель долго не отвечает. Обновите страницу. Если не помогло — откройте в Chrome/Яндекс без VPN, очистите данные сайта для voroninkostroma.ru.";
-}, 15000);
+    "Панель долго не отвечает.<br>" +
+    "<button type=\"button\" onclick=\"location.reload()\" style=\"width:auto;margin:12px 0 0;padding:10px 18px;\">Обновить страницу</button>" +
+    "<br><small style=\"color:#9a9a9a\">Если не помогло — откройте в Chrome/Яндекс, отключите блокировщик для voroninkostroma.ru.</small>";
+}, 12000);
 </script>
 </body>
 </html>

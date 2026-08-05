@@ -8,7 +8,7 @@
  * в аккаунт ImgBB. Теперь ключи хранятся как секреты воркера, а браузер обращается
  * сюда и обязан предъявить токен входа Firebase.
  *
- * Два HTTP-маршрута:
+ * HTTP-маршруты:
  *   POST /notify — уведомление о новом заказе в Telegram.
  *                  Пускает вошедшего покупателя с подтверждённой почтой.
  *                  Текст сообщения читается из документа заказа в Firestore, а не
@@ -17,6 +17,12 @@
  *   POST /upload — загрузка фото товара на ImgBB.
  *                  Пускает только администратора (проверяется документ admins/<uid>
  *                  в Firestore токеном самого вызывающего — сервисный ключ не нужен).
+ *   /__/firebase/identitytoolkit/* — reverse-proxy → identitytoolkit.googleapis.com
+ *   /__/firebase/securetoken/*     — reverse-proxy → securetoken.googleapis.com
+ *   /__/firebase/firestore/*       — reverse-proxy → firestore.googleapis.com
+ *                  Нужны потому, что у части сетей в РФ *.googleapis.com / gstatic
+ *                  недоступны без VPN. Браузер ходит только на workers.dev; до Google
+ *                  дотягивается уже Cloudflare (см. config.js applyFirebaseProxies).
  *
  * Плюс один Cron Trigger (см. scheduled() и [triggers] в wrangler.toml):
  *   ежедневная автоочистка Корзины — товары /admin/ с deleted:true старше 30 дней
@@ -47,6 +53,12 @@ export default {
     const origin = request.headers.get("Origin") || "";
     const allowed = allowedOrigins(env);
     const corsOrigin = allowed.includes(origin) ? origin : allowed[0];
+    const pathname = new URL(request.url).pathname;
+
+    // Auth/Firestore proxy — GET+POST (long polling), чужой Origin не пускаем (open proxy).
+    if (pathname.startsWith("/__/firebase/")) {
+      return handleFirebaseProxy(request, env, corsOrigin, allowed);
+    }
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(corsOrigin) });
@@ -60,7 +72,7 @@ export default {
       return json({ error: "Forbidden origin" }, 403, corsOrigin);
     }
 
-    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+    const path = pathname.replace(/\/+$/, "");
 
     try {
       if (path === "/notify") return await handleNotify(request, env, corsOrigin);
@@ -107,6 +119,114 @@ function json(body, status, origin) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders(origin) }
+  });
+}
+
+// ===== Firebase Auth + Firestore reverse-proxy =====
+//
+// Префиксы совпадают с applyFirebaseProxies() в config.js. Браузер не ходит на
+// *.googleapis.com напрямую — иначе на части сетей в РФ панель и вход «молчат».
+
+const FIREBASE_PROXY_UPSTREAMS = [
+  { prefix: "/__/firebase/identitytoolkit", host: "identitytoolkit.googleapis.com" },
+  { prefix: "/__/firebase/securetoken", host: "securetoken.googleapis.com" },
+  { prefix: "/__/firebase/firestore", host: "firestore.googleapis.com" }
+];
+
+const FIREBASE_PROXY_REQUEST_HEADERS = [
+  "accept",
+  "accept-language",
+  "authorization",
+  "content-type",
+  "x-client-version",
+  "x-client-data",
+  "x-firebase-gmpid",
+  "x-firebase-client",
+  "x-firebase-appcheck",
+  "x-goog-api-client",
+  "x-goog-request-params",
+  "x-http-method-override",
+  "x-requested-with"
+];
+
+function firebaseProxyCorsHeaders(origin, request) {
+  const requested = request.headers.get("Access-Control-Request-Headers");
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers":
+      requested ||
+      "Content-Type, Authorization, X-Goog-Api-Client, X-Goog-Request-Params, X-Firebase-GMPID, X-Client-Version, X-Firebase-Client, X-Firebase-AppCheck",
+    "Access-Control-Expose-Headers": "*",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin, Access-Control-Request-Headers"
+  };
+}
+
+async function handleFirebaseProxy(request, env, corsOrigin, allowed) {
+  const origin = request.headers.get("Origin") || "";
+  if (!allowed.includes(origin)) {
+    return json({ error: "Forbidden origin" }, 403, corsOrigin);
+  }
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: firebaseProxyCorsHeaders(corsOrigin, request)
+    });
+  }
+
+  const url = new URL(request.url);
+  const match = FIREBASE_PROXY_UPSTREAMS.find(
+    (entry) => url.pathname === entry.prefix || url.pathname.startsWith(entry.prefix + "/")
+  );
+  if (!match) {
+    return json({ error: "Not found" }, 404, corsOrigin);
+  }
+
+  const upstreamPath = url.pathname.slice(match.prefix.length) || "/";
+  const target = `https://${match.host}${upstreamPath}${url.search}`;
+
+  const headers = new Headers();
+  for (const name of FIREBASE_PROXY_REQUEST_HEADERS) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  // Browser API key restrictions (HTTP referrers) смотрят Referer — без него
+  // запрос с IP Cloudflare к Google с ключом сайта может быть отклонён.
+  headers.set("Referer", origin + "/");
+  headers.set("Host", match.host);
+
+  const init = {
+    method: request.method,
+    headers,
+    redirect: "manual"
+  };
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body;
+    init.duplex = "half";
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch(target, init);
+  } catch (err) {
+    console.error("Firebase proxy upstream failed:", match.host, err);
+    return json({ error: "Upstream unreachable" }, 502, corsOrigin);
+  }
+
+  const outHeaders = new Headers(firebaseProxyCorsHeaders(corsOrigin, request));
+  for (const [key, value] of upstream.headers) {
+    const low = key.toLowerCase();
+    if (low.startsWith("access-control-")) continue;
+    if (low === "content-encoding" || low === "transfer-encoding" || low === "connection") continue;
+    outHeaders.set(key, value);
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: outHeaders
   });
 }
 

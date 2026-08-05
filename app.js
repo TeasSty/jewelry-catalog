@@ -1,8 +1,7 @@
-  // Firebase НЕ импортируем статически с gstatic.com: у части клиентов (блокировки,
-  // DNS, корпоративный прокси, сбои CDN) модуль firebase-*.js не грузится — и тогда
-  // ПАДАЕТ ВЕСЬ app.js, вместе с каталогом. Каталог должен открываться без Google.
-  // Auth/Firestore подключаем лениво; если не вышло — витрина работает, вход/заказ нет.
-  import { firebaseConfig, relayUrl } from "./config.js";
+  // Firebase НЕ импортируем статически с gstatic: у части клиентов (блокировки ISP
+  // в РФ, DNS, AdBlock) модуль не грузится — и тогда ПАДАЕТ ВЕСЬ app.js. Каталог
+  // должен открываться без Google. SDK — с /vendor/, API — через воркер-прокси.
+  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies } from "./config.js";
 
   let db = null;
   let auth = null;
@@ -33,27 +32,18 @@
 
   async function initFirebase() {
     const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"),
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js")
+      import(firebaseSdkUrl("firebase-app.js")),
+      import(firebaseSdkUrl("firebase-firestore.js")),
+      import(firebaseSdkUrl("firebase-auth.js"))
     ]);
 
     const app = initializeApp(firebaseConfig);
-    // initializeFirestore вместо обычного getFirestore — настраиваем транспорт.
-    //
-    // По умолчанию Firestore общается по WebChannel — это потоковое соединение поверх HTTP.
-    // Через VPN и корпоративные прокси (а из России к Google почти всегда идут именно так)
-    // такое соединение часто рвётся или не устанавливается вовсе. Симптом характерный:
-    // вход в аккаунт проходит нормально (Firebase Auth — обычные HTTPS-запросы, прокси их
-    // пропускает), а любое обращение к базе тихо падает.
-    //
-    // experimentalAutoDetectLongPolling, а не жёсткий experimentalForceLongPolling: SDK
-    // сам проверяет при подключении, работает ли быстрый потоковый канал, и переходит на
-    // обычный HTTP-опрос только если нет — раньше опрос был включён всегда и для всех,
-    // даже для тех посетителей, кому он не нужен, а он ощутимо медленнее (у каждого
-    // запроса своя отдельная накладная на установление соединения, а не общий канал).
-    db = firestoreMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
     auth = authMod.getAuth(app);
+    // Auth + Firestore через Cloudflare Worker: браузер не ходит на *.googleapis.com
+    // (у части сетей в РФ без VPN эти хосты недоступны). Long polling обязателен —
+    // WebChannel через reverse-proxy ненадёжен.
+    const fsSettings = applyFirebaseProxies(auth);
+    db = firestoreMod.initializeFirestore(app, fsSettings);
 
     collection = firestoreMod.collection;
     addDoc = firestoreMod.addDoc;

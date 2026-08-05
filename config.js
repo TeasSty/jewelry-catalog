@@ -19,8 +19,8 @@ export const firebaseConfig = {
 };
 
 // Адрес Cloudflare Worker из папки worker/ — единственное место, где лежат секреты.
-// Через него идут два действия: уведомление о заказе в Telegram (/notify) и загрузка
-// фото товара на ImgBB (/upload).
+// Через него идут: /notify (Telegram), /upload (ImgBB) и /__/firebase/* (прокси
+// Auth + Firestore, когда у клиента режут googleapis без VPN).
 //
 // Порядок развёртывания — SECURITY.md, раздел «Как поднять воркер».
 // Секреты (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, IMGBB_API_KEY) в воркер ещё нужно
@@ -31,4 +31,34 @@ export const RELAY_URL = "https://voronin-relay.gwho12345678.workers.dev";
 // Убирает хвостовые слэши, чтобы `${relayUrl()}/notify` не превратился в "//notify"
 export function relayUrl() {
   return RELAY_URL.replace(/\/+$/, "");
+}
+
+// Локальная копия Firebase JS SDK (vendor/) — без похода на gstatic.com.
+// Абсолютный путь от корня домена, чтобы одинаково работал и /admin/, и корень.
+export const FIREBASE_SDK_VERSION = "10.8.0";
+export function firebaseSdkUrl(file) {
+  return new URL(`/vendor/firebase/${FIREBASE_SDK_VERSION}/${file}`, location.origin).href;
+}
+
+/**
+ * Направляет Auth и Firestore через reverse-proxy воркера.
+ * Вызывать сразу после getAuth / перед любыми запросами, пока сессия ещё не тронута.
+ * host с путём поддерживается SDK (как у эмулятора): URL собирается как
+ * https://{apiHost}/v1/accounts:... → workers.dev/__/firebase/identitytoolkit/v1/...
+ */
+export function applyFirebaseProxies(auth, firestoreSettings = {}) {
+  const base = relayUrl();
+  if (!base) {
+    return { experimentalForceLongPolling: true, ...firestoreSettings };
+  }
+  const host = base.replace(/^https:\/\//i, "");
+  auth.config.apiHost = `${host}/__/firebase/identitytoolkit`;
+  auth.config.tokenApiHost = `${host}/__/firebase/securetoken`;
+  auth.config.apiScheme = "https";
+  return {
+    host: `${host}/__/firebase/firestore`,
+    ssl: true,
+    experimentalForceLongPolling: true,
+    ...firestoreSettings
+  };
 }

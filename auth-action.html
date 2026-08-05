@@ -25,17 +25,16 @@
 <meta name="robots" content="noindex, nofollow">
 
 <!-- Та же политика, что в index.html: своя страница — свой набор разрешений.
-     connect-src нужен для запросов к Firebase Auth (identitytoolkit/securetoken,
-     оба под *.googleapis.com), img-src не нужен вовсе, воркер тут не используется. -->
+     Auth идёт через воркер-прокси (/__/firebase/*), SDK — с /vendor/. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
   base-uri 'none';
   object-src 'none';
   form-action 'none';
-  script-src 'self' https://www.gstatic.com;
+  script-src 'self';
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src https://fonts.gstatic.com;
-  connect-src 'self' https://*.googleapis.com;
+  connect-src 'self' https://voronin-relay.gwho12345678.workers.dev;
   upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 
@@ -186,6 +185,6 @@
      запретил бы браузеру выполнить код прямо внутри <script>, и страница осталась бы
      на шаге "Проверяем ссылку…" навсегда, без единой ошибки в консоли (это как раз
      проверялось при тестировании — ровно так и произошло с первой версией файла). -->
-<script type="module" src="auth-action.js"></script>
+<script type="module" src="auth-action.js?v=20260805c"></script>
 </body>
 </html>

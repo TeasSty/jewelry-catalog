@@ -1,11 +1,15 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import {
-  getAuth, applyActionCode, verifyPasswordResetCode, confirmPasswordReset
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { firebaseConfig } from "./config.js";
+import { firebaseConfig, firebaseSdkUrl, applyFirebaseProxies } from "./config.js";
+
+const [{ initializeApp }, authMod] = await Promise.all([
+  import(firebaseSdkUrl("firebase-app.js")),
+  import(firebaseSdkUrl("firebase-auth.js"))
+]);
+
+const { getAuth, applyActionCode, verifyPasswordResetCode, confirmPasswordReset } = authMod;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+applyFirebaseProxies(auth);
 
 function showStep(name){
   document.querySelectorAll("[data-step]").forEach(el => {
@@ -91,5 +95,5 @@ if (!oobCode) {
     })
     .catch(err => showError(ACTION_ERROR_MESSAGES[err.code] || err.message));
 } else {
-  showError("Неизвестный тип ссылки.");
+  showError("Неизвестный тип ссылки. Откройте письмо ещё раз или запросите новую.");
 }

@@ -62,8 +62,30 @@
 
 ## Как поднять воркер
 
-Воркер (`worker/index.js`) — единственное место с секретами. Два маршрута:
-`POST /notify` (уведомление о заказе в Telegram) и `POST /upload` (загрузка фото на ImgBB).
+Воркер (`worker/index.js`) — единственное место с секретами и **прокси Firebase**.
+Маршруты:
+
+- `POST /notify` — уведомление о заказе в Telegram
+- `POST /upload` — загрузка фото на ImgBB
+- `/__/firebase/identitytoolkit/*` → `identitytoolkit.googleapis.com` (Auth)
+- `/__/firebase/securetoken/*` → `securetoken.googleapis.com` (обновление токена)
+- `/__/firebase/firestore/*` → `firestore.googleapis.com` (база)
+
+Прокси нужен потому, что у части сетей в РФ `*.googleapis.com` и `gstatic.com`
+недоступны без VPN. Браузер ходит только на `*.workers.dev`; до Google дотягивается
+Cloudflare. SDK Firebase лежит локально в `vendor/firebase/` (не грузится с gstatic).
+
+**После изменения `worker/index.js` обязательно:**
+
+```bash
+cd worker
+wrangler deploy
+```
+
+Без деплоя воркера сайт на GitHub Pages обновится, но прокси не заработает — вход
+и админка снова упрутся в блокировку Google.
+
+Полная установка с нуля:
 
 ```bash
 npm install -g wrangler
@@ -80,7 +102,7 @@ wrangler deploy
 
 1. `config.js` → `export const RELAY_URL = "https://..."`
 2. `index.html` → в `connect-src` внутри `Content-Security-Policy`
-3. `admin/index.html` → там же в `connect-src`
+3. `admin/index.html` (и `auth-action.html`) → там же в `connect-src`
 
 Без пункта 2 и 3 браузер заблокирует запрос — политика безопасности не пускает на адреса,
 которых нет в белом списке.
@@ -89,8 +111,9 @@ wrangler deploy
 воркер принимает запросы (через запятую). Сейчас это `https://voroninkostroma.ru`,
 `https://www.voroninkostroma.ru` и `https://teassty.github.io` (зеркало GitHub Pages).
 
-Пока `RELAY_URL` пустой, сайт работает: заказы сохраняются в Firestore и видны в `/admin/`,
-просто без Telegram-уведомления. Загрузка нового фото в панели покажет понятную ошибку.
+Пока `RELAY_URL` пустой, каталог открывается, но вход/заказ/админка без прокси
+на «заблокированных» сетях не заработают. Загрузка нового фото в панели покажет
+понятную ошибку, пока не задан `IMGBB_API_KEY`.
 
 ---
 
@@ -153,7 +176,7 @@ curl -i "https://firestore.googleapis.com/v1/projects/voronin-jewelry/databases/
 | Загрузка чужих файлов на ImgBB | `/upload` проверяет `admins/<uid>`, тип и размер файла |
 | Запрос с чужого сайта | Воркер: белый список `Origin`, CORS |
 | XSS через данные заказа/каталога | `escapeHtml()` перед каждым `innerHTML` + CSP |
-| Чужой скрипт на странице | CSP: `script-src 'self' https://www.gstatic.com` |
+| Чужой скрипт на странице | CSP: `script-src 'self'` (SDK в `/vendor/`) |
 | Кликджекинг на панели | Выход из фрейма в начале `admin/admin.js` |
 | Посторонний видит интерфейс панели | Проверка `admins/<uid>` в `admin/admin.js` |
 

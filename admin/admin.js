@@ -1,4 +1,4 @@
-  import { firebaseConfig, relayUrl } from "../config.js";
+  import { firebaseConfig, relayUrl, firebaseSdkUrl, applyFirebaseProxies } from "../config.js";
 
   // Панель не должна открываться внутри чужого <iframe>: иначе посторонний сайт может
   // накрыть её прозрачным слоем и подловить клик по "Удалить" (кликджекинг). Полноценно
@@ -10,13 +10,12 @@
     throw new Error("Панель администратора не работает во фрейме");
   }
 
-  // Firebase грузим динамически: при статическом import с gstatic весь модуль
-  // молча не стартует на части сетей/устройств — экран «Проверяем сессию…» вечный.
-  // Панели без Firebase нет, но ошибку нужно показать явно.
+  // Firebase грузим динамически с /vendor/ (не с gstatic): у части сетей в РФ
+  // gstatic/googleapis режутся — без VPN SDK не грузился бы вовсе.
+  // Auth/Firestore API идут через Cloudflare Worker (/__/firebase/*).
   //
-  // Таймаут обязателен: на части сетей/VPN dynamic import ни resolve, ни reject —
-  // без гонки с таймером catch ниже никогда не сработает, и останется только
-  // запасной setTimeout в index.html (через 15с). Здесь рвём раньше и с причиной.
+  // Таймаут обязателен: dynamic import ни resolve, ни reject на «плохой» сети —
+  // без гонки с таймером catch ниже никогда не сработает.
   function withTimeout(promise, ms, label) {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error(label + " timed out after " + ms + "ms")), ms);
@@ -27,18 +26,34 @@
     });
   }
 
+  function showFirebaseLoadError(err) {
+    const checking = document.getElementById("authChecking");
+    if (!checking) return;
+    checking.style.display = "block";
+    checking.innerHTML =
+      "Не удалось связаться с сервером авторизации.<br>" +
+      "Обновите страницу. Если ошибка повторяется — отключите блокировщик рекламы " +
+      "для этого сайта и попробуйте другой браузер.<br><br>" +
+      "<button type=\"button\" id=\"firebaseRetryBtn\" style=\"width:auto;margin-top:8px;\">Повторить</button>" +
+      "<br><small style=\"color:#9a9a9a\">" + (err && err.message ? err.message : String(err)) + "</small>";
+    const btn = document.getElementById("firebaseRetryBtn");
+    if (btn) btn.addEventListener("click", () => location.reload());
+  }
+
   let app, auth, db;
   let signInWithEmailAndPassword, signOut, onAuthStateChanged;
   let collection, doc, getDoc, setDoc, deleteDoc, deleteField, getDocs, query, where, orderBy, limit, updateDoc, serverTimestamp;
 
   try {
     const [appMod, authMod, fsMod] = await withTimeout(Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"),
-      import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js")
-    ]), 12000, "Firebase SDK load");
+      import(firebaseSdkUrl("firebase-app.js")),
+      import(firebaseSdkUrl("firebase-auth.js")),
+      import(firebaseSdkUrl("firebase-firestore.js"))
+    ]), 10000, "Firebase SDK load");
     app = appMod.initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
+    // Сразу на прокси воркера — до onAuthStateChanged / signIn.
+    const fsSettings = applyFirebaseProxies(auth);
     signInWithEmailAndPassword = authMod.signInWithEmailAndPassword;
     signOut = authMod.signOut;
     onAuthStateChanged = authMod.onAuthStateChanged;
@@ -55,22 +70,12 @@
     limit = fsMod.limit;
     updateDoc = fsMod.updateDoc;
     serverTimestamp = fsMod.serverTimestamp;
-    // В админке принудительный long polling: через VPN/прокси из РФ WebChannel
-    // часто рвётся или «висит» без ошибки — панель «не работает» при живом входе.
-    // experimentalAutoDetectLongPolling (как на витрине) здесь опасен: probe
-    // WebChannel может не завершиться, и getDoc(admins/uid) не вернётся никогда.
-    // Скорость вторична — realtime-слушателей в панели нет.
-    db = fsMod.initializeFirestore(app, { experimentalForceLongPolling: true });
+    // experimentalForceLongPolling: WebChannel через прокси ненадёжен; long polling
+    // — обычные HTTPS POST/GET, которые воркер прозрачно пересылает.
+    db = fsMod.initializeFirestore(app, fsSettings);
   } catch (err) {
     console.error("Не удалось загрузить Firebase для админки:", err);
-    const checking = document.getElementById("authChecking");
-    if (checking) {
-      checking.style.display = "block";
-      checking.innerHTML =
-        "Не удалось связаться с сервером авторизации (Firebase). " +
-        "Проверьте интернет, отключите VPN/блокировщик и обновите страницу.<br><br>" +
-        "<small style=\"color:#9a9a9a\">" + (err && err.message ? err.message : String(err)) + "</small>";
-    }
+    showFirebaseLoadError(err);
     throw err;
   }
 
@@ -347,8 +352,8 @@
         // заново, не требуя вводить пароль ещё раз.
         showAuthScreen(
           "Не удалось связаться с базой Firestore, поэтому права администратора не проверены. " +
-          "Сам вход прошёл успешно — дело в соединении, а не в логине. Если включён VPN или прокси, " +
-          "попробуйте обновить страницу, а затем сменить или выключить его.\n\n" +
+          "Сам вход прошёл успешно — дело в соединении, а не в логине. Обновите страницу; " +
+          "если не поможет — отключите блокировщик для этого сайта.\n\n" +
           "Код ошибки: " + (result.errorCode || "неизвестен")
         );
         return;
