@@ -33,15 +33,15 @@
   async function initFirebase() {
     const [{ initializeApp }, firestoreMod, authMod] = await Promise.all([
       import(firebaseSdkUrl("firebase-app.js")),
-      import(firebaseSdkUrl("firebase-firestore.js")),
+      import(firebaseSdkUrl("firebase-firestore-lite.js")),
       import(firebaseSdkUrl("firebase-auth.js"))
     ]);
 
     const app = initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
     // Auth + Firestore через Cloudflare Worker: браузер не ходит на *.googleapis.com
-    // (у части сетей в РФ без VPN эти хосты недоступны). Long polling обязателен —
-    // WebChannel через reverse-proxy ненадёжен.
+    // (у части сетей в РФ без VPN эти хосты недоступны). Firestore lite — только REST,
+    // без WebChannel/Listen: полный SDK через reverse-proxy давал пустые списки.
     const fsSettings = applyFirebaseProxies(auth);
     db = firestoreMod.initializeFirestore(app, fsSettings);
 

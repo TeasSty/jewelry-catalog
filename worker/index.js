@@ -153,11 +153,15 @@ function firebaseProxyCorsHeaders(origin, request) {
   const requested = request.headers.get("Access-Control-Request-Headers");
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
       requested ||
-      "Content-Type, Authorization, X-Goog-Api-Client, X-Goog-Request-Params, X-Firebase-GMPID, X-Client-Version, X-Firebase-Client, X-Firebase-AppCheck",
-    "Access-Control-Expose-Headers": "*",
+      "Content-Type, Authorization, X-Goog-Api-Client, X-Goog-Request-Params, X-Firebase-GMPID, X-Client-Version, X-Firebase-Client, X-Firebase-AppCheck, X-HTTP-Method-Override",
+    // Явный список: Access-Control-Expose-Headers: * в credentialed/XHR не всегда
+    // открывает x-http-session-id — без него WebChannel (полный SDK) не продолжает сессию.
+    // Lite/REST эти заголовки не читает, но прокси остаётся совместимым с обоими.
+    "Access-Control-Expose-Headers":
+      "Content-Type, X-HTTP-Session-Id, X-Client-Wire-Protocol, X-Goog-Api-Client, Date, ETag",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin, Access-Control-Request-Headers"
   };
@@ -195,7 +199,7 @@ async function handleFirebaseProxy(request, env, corsOrigin, allowed) {
   // Browser API key restrictions (HTTP referrers) смотрят Referer — без него
   // запрос с IP Cloudflare к Google с ключом сайта может быть отклонён.
   headers.set("Referer", origin + "/");
-  headers.set("Host", match.host);
+  // Host задаёт сам runtime fetch по URL — вручную не ставим.
 
   const init = {
     method: request.method,
@@ -220,6 +224,12 @@ async function handleFirebaseProxy(request, env, corsOrigin, allowed) {
     const low = key.toLowerCase();
     if (low.startsWith("access-control-")) continue;
     if (low === "content-encoding" || low === "transfer-encoding" || low === "connection") continue;
+    // Не затираем CORS Vary значением upstream (Accept-Encoding) — иначе кэш
+    // промежуточных узлов может отдать ответ без нужного Allow-Origin.
+    if (low === "vary") {
+      outHeaders.append("Vary", value);
+      continue;
+    }
     outHeaders.set(key, value);
   }
 

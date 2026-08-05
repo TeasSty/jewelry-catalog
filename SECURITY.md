@@ -74,6 +74,9 @@
 Прокси нужен потому, что у части сетей в РФ `*.googleapis.com` и `gstatic.com`
 недоступны без VPN. Браузер ходит только на `*.workers.dev`; до Google дотягивается
 Cloudflare. SDK Firebase лежит локально в `vendor/firebase/` (не грузится с gstatic).
+Сайт и `/admin/` используют **Firestore Lite** (только REST `/v1/...` через этот
+прокси). Полный SDK с WebChannel/Listen через Worker ненадёжен — вход мог
+работать, а списки заказов/товаров выглядеть пустыми.
 
 **После изменения `worker/index.js` обязательно:**
 

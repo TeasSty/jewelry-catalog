@@ -13,6 +13,10 @@
   // Firebase грузим динамически с /vendor/ (не с gstatic): у части сетей в РФ
   // gstatic/googleapis режутся — без VPN SDK не грузился бы вовсе.
   // Auth/Firestore API идут через Cloudflare Worker (/__/firebase/*).
+  // Firestore — lite (REST): полный SDK ходит через WebChannel/Listen, и через
+  // reverse-proxy воркера списки (getDocs заказов/товаров) ломаются, хотя вход
+  // и REST-чтение базы работают. Lite использует только HTTPS REST — то, что
+  // прокси уже умеет прозрачно пересылать.
   //
   // Таймаут обязателен: dynamic import ни resolve, ни reject на «плохой» сети —
   // без гонки с таймером catch ниже никогда не сработает.
@@ -48,7 +52,7 @@
     const [appMod, authMod, fsMod] = await withTimeout(Promise.all([
       import(firebaseSdkUrl("firebase-app.js")),
       import(firebaseSdkUrl("firebase-auth.js")),
-      import(firebaseSdkUrl("firebase-firestore.js"))
+      import(firebaseSdkUrl("firebase-firestore-lite.js"))
     ]), 10000, "Firebase SDK load");
     app = appMod.initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
@@ -70,8 +74,6 @@
     limit = fsMod.limit;
     updateDoc = fsMod.updateDoc;
     serverTimestamp = fsMod.serverTimestamp;
-    // experimentalForceLongPolling: WebChannel через прокси ненадёжен; long polling
-    // — обычные HTTPS POST/GET, которые воркер прозрачно пересылает.
     db = fsMod.initializeFirestore(app, fsSettings);
   } catch (err) {
     console.error("Не удалось загрузить Firebase для админки:", err);
@@ -781,8 +783,17 @@
   async function refreshProductsList() {
     const statusEl = document.getElementById("adminSearchStatus");
     statusEl.innerText = allProductsCache ? "" : "Загрузка каталога...";
-    await loadAllProducts(false);
-    renderProductsTable();
+    try {
+      await loadAllProducts(false);
+      renderProductsTable();
+    } catch (err) {
+      console.error("Не удалось загрузить каталог:", err);
+      statusEl.innerText = "Ошибка загрузки каталога: " + (err.message || String(err));
+      const tbody = document.getElementById("productsTable");
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);">Ошибка загрузки: ${escapeHtml(err.message || String(err))}</td></tr>`;
+      }
+    }
   }
 
   // readonly до фокуса/клика — Chrome не подставляет сохранённые email/пароли

@@ -45,11 +45,15 @@ export function firebaseSdkUrl(file) {
  * Вызывать сразу после getAuth / перед любыми запросами, пока сессия ещё не тронута.
  * host с путём поддерживается SDK (как у эмулятора): URL собирается как
  * https://{apiHost}/v1/accounts:... → workers.dev/__/firebase/identitytoolkit/v1/...
+ *
+ * Для Firestore используйте firebase-firestore-lite.js (REST), не полный SDK:
+ * WebChannel/Listen через reverse-proxy на Cloudflare Workers нестабилен
+ * (getDocs/заказы «пустые», хотя REST и данные в базе в порядке).
  */
 export function applyFirebaseProxies(auth, firestoreSettings = {}) {
   const base = relayUrl();
   if (!base) {
-    return { experimentalForceLongPolling: true, ...firestoreSettings };
+    return { ...firestoreSettings };
   }
   const host = base.replace(/^https:\/\//i, "");
   auth.config.apiHost = `${host}/__/firebase/identitytoolkit`;
@@ -58,7 +62,6 @@ export function applyFirebaseProxies(auth, firestoreSettings = {}) {
   return {
     host: `${host}/__/firebase/firestore`,
     ssl: true,
-    experimentalForceLongPolling: true,
     ...firestoreSettings
   };
 }
