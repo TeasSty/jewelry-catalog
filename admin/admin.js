@@ -83,6 +83,7 @@
   function resolveImagePathForPreview(raw) {
     const path = String(raw || "").trim();
     if (!path) return "";
+    if (path.includes("..") || path.includes("\\")) return "";
     if (/^https:\/\//i.test(path) || path.startsWith("blob:")) return path;
     if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) return "";
     const clean = path.replace(/^\/+/, "");

@@ -86,6 +86,7 @@
   function resolveImagePath(raw){
     const path = String(raw || "").trim();
     if (!path) return "";
+    if (path.includes("..") || path.includes("\\")) return ""; // path traversal в атрибут src
     if (/^https:\/\//i.test(path)) return path;
     if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("//")) return ""; // чужая схема или другой домен
     const clean = path.replace(/^\/+/, "");

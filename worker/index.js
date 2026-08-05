@@ -11,8 +11,9 @@
  * Два HTTP-маршрута:
  *   POST /notify — уведомление о новом заказе в Telegram.
  *                  Пускает вошедшего покупателя с подтверждённой почтой.
- *                  Текст сообщения собирается ЗДЕСЬ, а не на клиенте, — иначе через
- *                  этот же адрес можно было бы слать в чат произвольный текст.
+ *                  Текст сообщения читается из документа заказа в Firestore, а не
+ *                  из тела запроса — иначе покупатель мог бы подменить состав или
+ *                  контакты в уведомлении относительно того, что реально в базе.
  *   POST /upload — загрузка фото товара на ImgBB.
  *                  Пускает только администратора (проверяется документ admins/<uid>
  *                  в Firestore токеном самого вызывающего — сервисный ключ не нужен).
@@ -184,28 +185,61 @@ async function isAdmin(uid, idToken, env) {
   return res.status === 200;
 }
 
+/** Декодирует одно поле из ответа Firestore REST API в обычное JS-значение. */
+function decodeFirestoreValue(value) {
+  if (!value || typeof value !== "object") return undefined;
+  if ("nullValue" in value) return null;
+  if ("stringValue" in value) return value.stringValue;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return value.doubleValue;
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("arrayValue" in value) {
+    return (value.arrayValue.values || []).map(decodeFirestoreValue);
+  }
+  if ("mapValue" in value) {
+    const out = {};
+    for (const [key, nested] of Object.entries(value.mapValue.fields || {})) {
+      out[key] = decodeFirestoreValue(nested);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+function decodeFirestoreDocument(doc) {
+  const out = {};
+  for (const [key, value] of Object.entries(doc.fields || {})) {
+    out[key] = decodeFirestoreValue(value);
+  }
+  return out;
+}
+
 /** /notify принимает только заказы, которые реально лежат в Firestore и принадлежат
  *  вызывающему — иначе вошедший покупатель мог бы слать в Telegram фиктивные
  *  уведомления без оформления заказа (см. SECURITY.md). Читаем документ токеном
- *  самого пользователя: правила orders разрешают read только своему uid. */
-async function verifyRecentOrder(orderId, user, idToken, env) {
-  if (typeof orderId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) return false;
+ *  самого пользователя: правила orders разрешают read только своему uid.
+ *  Текст уведомления собирается из этого документа, а не из тела запроса. */
+async function fetchVerifiedOrder(orderId, user, idToken, env) {
+  if (typeof orderId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) return null;
 
   const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/orders/${encodeURIComponent(orderId)}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
-  if (res.status !== 200) return false;
+  if (res.status !== 200) return null;
 
   const doc = await res.json().catch(() => null);
-  if (!doc || !doc.fields) return false;
+  if (!doc || !doc.fields) return null;
 
-  const uid = doc.fields.uid?.stringValue;
-  if (uid !== user.localId) return false;
+  const order = decodeFirestoreDocument(doc);
+  if (order.uid !== user.localId) return null;
 
-  const createdAt = doc.fields.createdAt?.timestampValue;
-  if (!createdAt) return false;
+  const createdAt = order.createdAt;
+  if (!createdAt) return null;
   const ageMs = Date.now() - new Date(createdAt).getTime();
   // Окно 10 минут: достаточно для сетевой задержки после addDoc, но не для повторного спама.
-  return ageMs >= 0 && ageMs <= 10 * 60 * 1000;
+  if (ageMs < 0 || ageMs > 10 * 60 * 1000) return null;
+
+  return order;
 }
 
 // ===== Автоочистка Корзины (Cron Trigger, без пользователя в сессии) =====
@@ -332,7 +366,8 @@ async function handleNotify(request, env, corsOrigin) {
   if (!user.emailVerified) return json({ error: "Email not verified" }, 403, corsOrigin);
 
   const orderId = clean(body.orderId, 128);
-  if (!orderId || !(await verifyRecentOrder(orderId, user, body.idToken, env))) {
+  const order = orderId ? await fetchVerifiedOrder(orderId, user, body.idToken, env) : null;
+  if (!order) {
     return json({ error: "Order not found" }, 403, corsOrigin);
   }
 
@@ -341,7 +376,6 @@ async function handleNotify(request, env, corsOrigin) {
     return json({ ok: true, skipped: "telegram not configured" }, 200, corsOrigin);
   }
 
-  const order = body.order && typeof body.order === "object" ? body.order : {};
   const items = Array.isArray(order.items) ? order.items.slice(0, MAX_ITEMS) : [];
 
   // Текст собираем сами из отдельных полей, обрезая длину. Клиент не может
