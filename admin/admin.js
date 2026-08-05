@@ -13,16 +13,30 @@
   // Firebase грузим динамически: при статическом import с gstatic весь модуль
   // молча не стартует на части сетей/устройств — экран «Проверяем сессию…» вечный.
   // Панели без Firebase нет, но ошибку нужно показать явно.
+  //
+  // Таймаут обязателен: на части сетей/VPN dynamic import ни resolve, ни reject —
+  // без гонки с таймером catch ниже никогда не сработает, и останется только
+  // запасной setTimeout в index.html (через 15с). Здесь рвём раньше и с причиной.
+  function withTimeout(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(label + " timed out after " + ms + "ms")), ms);
+      promise.then(
+        (v) => { clearTimeout(t); resolve(v); },
+        (e) => { clearTimeout(t); reject(e); }
+      );
+    });
+  }
+
   let app, auth, db;
   let signInWithEmailAndPassword, signOut, onAuthStateChanged;
   let collection, doc, getDoc, setDoc, deleteDoc, deleteField, getDocs, query, where, orderBy, limit, updateDoc, serverTimestamp;
 
   try {
-    const [appMod, authMod, fsMod] = await Promise.all([
+    const [appMod, authMod, fsMod] = await withTimeout(Promise.all([
       import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"),
       import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js")
-    ]);
+    ]), 12000, "Firebase SDK load");
     app = appMod.initializeApp(firebaseConfig);
     auth = authMod.getAuth(app);
     signInWithEmailAndPassword = authMod.signInWithEmailAndPassword;
@@ -42,7 +56,10 @@
     updateDoc = fsMod.updateDoc;
     serverTimestamp = fsMod.serverTimestamp;
     // В админке принудительный long polling: через VPN/прокси из РФ WebChannel
-    // часто рвётся — панель «не работает» при живом входе. Скорость вторична.
+    // часто рвётся или «висит» без ошибки — панель «не работает» при живом входе.
+    // experimentalAutoDetectLongPolling (как на витрине) здесь опасен: probe
+    // WebChannel может не завершиться, и getDoc(admins/uid) не вернётся никогда.
+    // Скорость вторична — realtime-слушателей в панели нет.
     db = fsMod.initializeFirestore(app, { experimentalForceLongPolling: true });
   } catch (err) {
     console.error("Не удалось загрузить Firebase для админки:", err);
@@ -240,7 +257,14 @@
   // действительно не существует.
   async function checkAdminStatus(user, attempt = 1) {
     try {
-      const snap = await getDoc(doc(db, "admins", user.uid));
+      // getDoc без таймаута на плохой сети/прокси может не завершиться вовсе —
+      // экран остаётся на «Проверяем сессию…», хотя вход уже прошёл. Рвём попытку
+      // сами и идём в ретраи / transientError (как при обычном сетевом сбое).
+      const snap = await withTimeout(
+        getDoc(doc(db, "admins", user.uid)),
+        10000,
+        "admins/" + user.uid + " getDoc"
+      );
       return { isAdmin: snap.exists() };
     } catch (err) {
       console.error("Проверка прав не удалась");
