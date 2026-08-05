@@ -233,7 +233,8 @@
       animateHeroCount(rawItems.length);
 
     } catch (error) {
-      console.error("Не удалось загрузить каталог: ", error);
+      // Без объекта error в консоли — там могут быть URL/детали сети.
+      console.error("Не удалось загрузить каталог");
       loadingState.style.display = "none";
       productGrid.style.display = "none";
       errorState.style.display = "block";
@@ -1782,7 +1783,7 @@
         await user.reload();
       } catch(err) {
         reloadedOk = false; // сеть подвела — ниже это учитываем, а не притворяемся, что перечитали
-        console.error("Не удалось обновить статус подтверждения почты (сеть?):", err);
+        console.error("Не удалось обновить статус подтверждения почты (сеть?)");
       }
       // Разлогиниваем только когда действительно ЗНАЕМ актуальный статус (reload прошёл)
       // и он по-прежнему "не подтверждено". Если reload не удался — не решаем вслепую.
@@ -2029,9 +2030,9 @@
   //
   // Пока адрес воркера не прописан (RELAY_URL в config.js), отправка тихо пропускается —
   // заказ при этом всё равно сохраняется в Firestore и виден в /admin/, ничего не теряется.
-  async function notifyTelegram(order){
+  async function notifyTelegram(order, orderId){
     const relay = relayUrl();
-    if(!relay || !currentUser) return;
+    if(!relay || !currentUser || !orderId) return;
     try {
       const idToken = await currentUser.getIdToken();
       await fetch(`${relay}/notify`, {
@@ -2039,6 +2040,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
+          orderId,
           order: {
             name: order.name,
             phone: order.phone,
@@ -2047,8 +2049,8 @@
           }
         })
       });
-    } catch(err) {
-      console.error("Не удалось отправить уведомление в Telegram:", err);
+    } catch (_) {
+      // Заказ уже в Firestore; сбой Telegram не показываем покупателю.
     }
   }
 
@@ -2065,6 +2067,11 @@
 
     if(!firebaseAvailable || !db){
       showNotice(FIREBASE_UNAVAILABLE_MSG, { title: "Заказ недоступен", type: "error" });
+      return;
+    }
+
+    if(!currentUser.emailVerified){
+      showNotice("Подтвердите почту по ссылке из письма, прежде чем оформить заказ.", { title: "Почта не подтверждена", type: "error" });
       return;
     }
 
@@ -2097,8 +2104,8 @@
     try {
       btn.disabled = true;
       btn.textContent = "Отправляю...";
-      await addDoc(collection(db, "orders"), orderData);
-      notifyTelegram(orderData);
+      const docRef = await addDoc(collection(db, "orders"), orderData);
+      notifyTelegram(orderData, docRef.id);
 
       cart = [];
       saveCart();
@@ -2108,7 +2115,10 @@
       cartOverlay.classList.remove("show");
       showNotice("Мы свяжемся с вами по указанному телефону.", { title: "Заказ отправлен!", type: "success" });
     } catch(err) {
-      showNotice(err.message, { title: "Не удалось отправить заказ", type: "error" });
+      const msg = err?.code === "permission-denied"
+        ? "Недостаточно прав. Подтвердите почту и войдите снова."
+        : "Не удалось отправить заказ. Проверьте подключение и попробуйте ещё раз.";
+      showNotice(msg, { title: "Не удалось отправить заказ", type: "error" });
     } finally {
       btn.disabled = false;
       btn.textContent = "Отправить заказ";
@@ -2207,6 +2217,6 @@
   initFirebase()
     .then(() => { bindAuthStateListener(); })
     .catch((err) => {
-      console.error("Firebase недоступен — каталог работает без входа/заказов:", err);
+      console.error("Firebase недоступен — каталог работает без входа/заказов");
       firebaseAvailable = false;
     });

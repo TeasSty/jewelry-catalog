@@ -223,7 +223,7 @@
       const snap = await getDoc(doc(db, "admins", user.uid));
       return { isAdmin: snap.exists() };
     } catch (err) {
-      console.error(`Проверка прав не удалась (попытка ${attempt}):`, err);
+      console.error("Проверка прав не удалась");
       if (attempt < 3) {
         await new Promise(resolve => setTimeout(resolve, 500 * attempt));
         return checkAdminStatus(user, attempt + 1);
@@ -294,7 +294,7 @@
           // Показываем панель как есть, а не форму входа: реальную защиту это не
           // ослабляет, поскольку запись/удаление проверяют правила на сервере
           // независимо от того, что показано на экране.
-          console.error("Проверка прав не прошла (временный сбой), но права для этого аккаунта уже подтверждались раньше — показываем панель.", result.errorCode);
+          console.error("Проверка прав не прошла (временный сбой), но права для этого аккаунта уже подтверждались раньше — показываем панель.");
           showAdminInterface();
           return;
         }
@@ -327,8 +327,8 @@
     if (document.visibilityState !== "visible") return;
     const user = auth.currentUser;
     if (!user) return;
-    user.getIdToken(true).catch((err) => {
-      console.warn("Не удалось обновить ID-токен после возврата на вкладку:", err);
+    user.getIdToken(true).catch(() => {
+      console.warn("Не удалось обновить ID-токен после возврата на вкладку");
     });
   });
 
@@ -457,9 +457,11 @@
       updateSizesFieldVisibility();
 
     } catch (error) {
-      console.error(error);
+      console.error("Ошибка сохранения товара");
       statusMsg.className = "status error";
-      statusMsg.innerText = "Ошибка: " + error.message;
+      statusMsg.innerText = error?.code === "permission-denied"
+        ? "Ошибка: недостаточно прав администратора."
+        : "Ошибка: не удалось сохранить. Проверьте соединение и попробуйте снова.";
       statusMsg.style.display = "block";
     } finally {
       submitBtn.disabled = false;

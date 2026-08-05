@@ -19,6 +19,7 @@
      в документе перед ней, а инлайн (без похода в сеть за файлом) — то,
      что реально успевает до восстановления скролла браузером при reload. -->
 <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+<script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <script src="scroll-restore.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">

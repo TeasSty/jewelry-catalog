@@ -14,6 +14,9 @@
      успеть до восстановления именно при reload (для обычного перехода по ссылке
      хватало и внешнего файла — там просто нечего восстанавливать, новая запись). -->
 <script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+<!-- Кликджекинг: GitHub Pages не отдаёт frame-ancestors / X-Frame-Options, meta-CSP
+     их тоже не задаёт — вырываемся из чужого iframe до отрисовки интерфейса. -->
+<script>if(window.top!==window.self){window.top.location=window.self.location;}</script>
 <!-- Критично ДО module/app.js и ДО CSP: часть клиентов держит старый Service Worker
      (PWA), который отдаёт устаревший/битый index+app из Cache Storage. Пока SW
      контролирует вкладку, новый app.js может вообще не выполниться. Этот инлайн

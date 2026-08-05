@@ -6,7 +6,7 @@ compatibility_date = "2024-11-01"
 [vars]
 FIREBASE_PROJECT_ID = "voronin-jewelry"
 # Через запятую можно перечислить несколько адресов (например, локальную проверку)
-ALLOWED_ORIGIN = "https://voroninkostroma.ru"
+ALLOWED_ORIGIN = "https://voroninkostroma.ru,https://www.voroninkostroma.ru,https://teassty.github.io"
 
 # Секреты в этот файл НЕ пишутся. Они задаются один раз командами:
 #   wrangler secret put TELEGRAM_BOT_TOKEN

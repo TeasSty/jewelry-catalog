@@ -184,6 +184,30 @@ async function isAdmin(uid, idToken, env) {
   return res.status === 200;
 }
 
+/** /notify принимает только заказы, которые реально лежат в Firestore и принадлежат
+ *  вызывающему — иначе вошедший покупатель мог бы слать в Telegram фиктивные
+ *  уведомления без оформления заказа (см. SECURITY.md). Читаем документ токеном
+ *  самого пользователя: правила orders разрешают read только своему uid. */
+async function verifyRecentOrder(orderId, user, idToken, env) {
+  if (typeof orderId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) return false;
+
+  const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/orders/${encodeURIComponent(orderId)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
+  if (res.status !== 200) return false;
+
+  const doc = await res.json().catch(() => null);
+  if (!doc || !doc.fields) return false;
+
+  const uid = doc.fields.uid?.stringValue;
+  if (uid !== user.localId) return false;
+
+  const createdAt = doc.fields.createdAt?.timestampValue;
+  if (!createdAt) return false;
+  const ageMs = Date.now() - new Date(createdAt).getTime();
+  // Окно 10 минут: достаточно для сетевой задержки после addDoc, но не для повторного спама.
+  return ageMs >= 0 && ageMs <= 10 * 60 * 1000;
+}
+
 // ===== Автоочистка Корзины (Cron Trigger, без пользователя в сессии) =====
 
 // Должно совпадать с TRASH_LIFETIME_DAYS в admin/admin.js — то же ограничение, что
@@ -306,6 +330,11 @@ async function handleNotify(request, env, corsOrigin) {
   const user = await verifyIdToken(body.idToken, env);
   if (!user) return json({ error: "Unauthorized" }, 401, corsOrigin);
   if (!user.emailVerified) return json({ error: "Email not verified" }, 403, corsOrigin);
+
+  const orderId = clean(body.orderId, 128);
+  if (!orderId || !(await verifyRecentOrder(orderId, user, body.idToken, env))) {
+    return json({ error: "Order not found" }, 403, corsOrigin);
+  }
 
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
     // Бот не настроен — заказ всё равно уже лежит в Firestore и виден в /admin/
