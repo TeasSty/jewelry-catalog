@@ -631,10 +631,13 @@
     white-space:nowrap;position:relative;
   }
   .sort-picker-btn:hover{border-color:var(--accent-dim);}
+  /* Символ, не data:-фон — CSP сайта не разрешает data:-изображения в img-src,
+     background-image с data:URI молча блокировался бы (нашёл по ошибке в
+     консоли). Тот же приём, что уже у .cat-btn .arrow. */
   .sort-picker-btn::after{
-    content:"";position:absolute;right:14px;top:50%;width:10px;height:6px;
+    content:"▾";position:absolute;right:14px;top:50%;
     transform:translateY(-50%);transition:transform .2s;
-    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a9a9a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
+    color:var(--text-dim);font-size:11px;line-height:1;
   }
   .sort-picker.open .sort-picker-btn{border-color:var(--accent);color:var(--accent);}
   .sort-picker.open .sort-picker-btn::after{transform:translateY(-50%) rotate(180deg);}
@@ -849,6 +852,30 @@
     color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;
   }
   .link-btn:hover{color:var(--accent);}
+
+  /* ===== Согласие на обработку персональных данных (152-ФЗ) =====
+     Настоящий <input type="checkbox"> остаётся в разметке и в фокус-порядке
+     (доступность, работа с клавиатуры/скринридером) — просто визуально скрыт
+     (position:absolute;opacity:0), а не display:none/удалён; своё оформление —
+     соседний <span>, синхронизированный через :checked + .consent-box. */
+  .consent-field{
+    display:flex;align-items:flex-start;gap:10px;margin:14px 0 16px;
+    font-size:12.5px;color:var(--text-dim);line-height:1.5;cursor:pointer;
+  }
+  .consent-field input{position:absolute;opacity:0;width:0;height:0;}
+  .consent-box{
+    flex:none;width:18px;height:18px;margin-top:1px;border-radius:4px;
+    border:1px solid var(--line);background:var(--bg-raised-2);
+    display:flex;align-items:center;justify-content:center;
+    transition:background .15s, border-color .15s;
+  }
+  .consent-field input:checked + .consent-box{background:var(--accent);border-color:var(--accent);}
+  .consent-box svg{width:12px;height:12px;color:#1a1a1a;opacity:0;transition:opacity .1s;}
+  .consent-field input:checked + .consent-box svg{opacity:1;}
+  .consent-field input:focus-visible + .consent-box{outline:2px solid var(--accent-dim);outline-offset:2px;}
+  .consent-field a{color:var(--accent);text-decoration:underline;}
+  .consent-field a:hover{text-decoration:none;}
+
   .primary-btn{
     position:relative;overflow:hidden;
     width:100%;padding:12px;background:var(--accent);color:#1a1a1a;border:none;
@@ -1278,6 +1305,8 @@
     display:flex;flex-direction:column;align-items:center;gap:5px;
     text-align:center;color:var(--text-dim);font-size:12.5px;letter-spacing:.01em;
   }
+  .footer-bottom a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
+  .footer-bottom a:hover{color:#dab863;}
   .back-to-top{
     display:inline-flex;align-items:center;gap:6px;margin-top:18px;
     color:var(--text-dim);font-size:12.5px;font-weight:600;
@@ -1730,7 +1759,7 @@
 
     <div class="footer-bottom">
       <p>© 2026 ИП Воронин • Ювелирное производство • Кострома</p>
-      <p>Все права защищены.</p>
+      <p>Все права защищены. <a href="privacy-policy.html">Политика конфиденциальности</a></p>
       <a href="#" class="back-to-top" id="backToTop">
         Наверх
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
@@ -1809,6 +1838,11 @@
       <input type="password" id="authPasswordInput" autocomplete="current-password" placeholder="Минимум 6 символов">
       <button class="link-btn" id="forgotPasswordBtn" type="button" style="display:none;">Забыли пароль?</button>
     </div>
+    <label class="consent-field" id="authConsentGroup" style="display:none;">
+      <input type="checkbox" id="authConsent">
+      <span class="consent-box" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+      <span>Я согласен на обработку персональных данных в соответствии с <a href="privacy-policy.html" target="_blank" rel="noopener">Политикой конфиденциальности</a></span>
+    </label>
     <button class="primary-btn" id="authSubmitBtn" type="button">Войти</button>
   </div>
 </div>
@@ -1840,7 +1874,12 @@
           <label>Комментарий к заказу</label>
           <input type="text" id="orderComment" placeholder="Необязательно" maxlength="500">
         </div>
-        <button class="primary-btn" id="submitOrderBtn" type="button">Отправить заказ</button>
+        <label class="consent-field">
+          <input type="checkbox" id="orderConsent">
+          <span class="consent-box" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span>Я согласен на обработку персональных данных в соответствии с <a href="privacy-policy.html" target="_blank" rel="noopener">Политикой конфиденциальности</a></span>
+        </label>
+        <button class="primary-btn" id="submitOrderBtn" type="button" disabled>Отправить заказ</button>
       </div>
     </div>
   </div>

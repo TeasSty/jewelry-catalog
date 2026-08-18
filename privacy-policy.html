@@ -1,0 +1,179 @@
+<!--
+  Политика конфиденциальности — по 152-ФЗ «О персональных данных». Текст типовой,
+  под сайт, который через форму оформления заказа/регистрации собирает имя,
+  телефон и email — ровно то, что реально просят формы этого сайта (см. чекбоксы
+  согласия в index.html: форма заказа и форма регистрации, обе ссылаются сюда).
+
+  [название компании] и [контактный email] — плейсхолдеры нарочно, не подставлены
+  сами (хотя в структурированных данных index.html эти сведения уже есть) —
+  правки в юридический текст должны пройти через владельца, а не через автоподстановку.
+-->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<!-- Инлайн и ДО тега CSP нарочно — см. подробный комментарий в index.html:
+     meta-CSP не действует на то, что стоит в документе перед ней, а инлайн
+     (без похода в сеть за файлом) — то, что реально успевает до восстановления
+     скролла браузером при reload. -->
+<script>if("scrollRestoration" in history){history.scrollRestoration="manual";}</script>
+<script src="scroll-restore.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Страница целиком статична — ни Firebase, ни воркера, ни картинок ей не нужно,
+     поэтому политика заметно у́же, чем у index.html. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  base-uri 'none';
+  object-src 'none';
+  form-action 'none';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src https://fonts.gstatic.com;
+  img-src 'self';
+  connect-src 'self';
+  upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+
+<title>Политика конфиденциальности — ИП Воронин</title>
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="https://voroninkostroma.ru/privacy-policy.html">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1a1a1a; --bg-raised:#232323; --bg-raised-2:#2a2a2a;
+    --line:#3a3a3a; --text:#e0e0e0; --text-dim:#9a9a9a;
+    --accent:#c9a24b; --accent-dim:#8f7736;
+    --font-display:'Fraunces','Iowan Old Style','Palatino Linotype',Georgia,serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased;font-size:15px;
+  }
+  a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
+  a:hover{color:#dab863;}
+
+  .nav{
+    position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+    padding:18px 28px;border-bottom:1px solid var(--line);background:rgba(26,26,26,.92);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  }
+  .logo-main{font-size:17px;font-weight:800;letter-spacing:.03em;color:#fff;}
+  .logo-sub{font-size:8.5px;font-weight:600;letter-spacing:.14em;color:var(--accent);margin-top:1px;}
+  .nav a.back{font-size:13px;color:var(--text-dim);text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+  .nav a.back:hover{color:var(--accent);}
+
+  main{max-width:720px;margin:0 auto;padding:56px 28px 100px;}
+  h1{font-family:var(--font-display);font-weight:500;font-size:clamp(26px,4vw,34px);color:#fff;margin-bottom:8px;}
+  .updated{font-size:13px;color:var(--text-dim);margin-bottom:40px;}
+
+  h2{
+    font-family:var(--font-display);font-weight:500;font-size:19px;color:var(--accent);
+    margin:36px 0 12px;display:flex;align-items:baseline;gap:10px;
+  }
+  h2 .num{font-size:14px;color:var(--text-dim);font-family:'Inter',sans-serif;font-weight:700;}
+  p{margin-bottom:14px;color:var(--text);}
+  p.dim{color:var(--text-dim);font-size:13.5px;}
+  ul{margin:0 0 14px 20px;}
+  li{margin-bottom:8px;}
+  strong{color:#fff;font-weight:600;}
+  .placeholder{color:var(--accent);background:rgba(201,162,75,.1);padding:1px 6px;border-radius:4px;font-weight:600;}
+
+  .contact-card{
+    background:var(--bg-raised);border:1px solid var(--line);border-radius:10px;
+    padding:20px 22px;margin-top:8px;
+  }
+  .contact-card p{margin-bottom:6px;font-size:14px;}
+  .contact-card p:last-child{margin-bottom:0;}
+
+  footer{border-top:1px solid var(--line);padding:28px;text-align:center;color:var(--text-dim);font-size:12.5px;}
+
+  @media (max-width:600px){
+    .nav{padding:14px 18px;}
+    main{padding:40px 18px 72px;}
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div>
+    <div class="logo-main">ИП ВОРОНИН</div>
+    <div class="logo-sub">ЮВЕЛИРНОЕ ПРОИЗВОДСТВО</div>
+  </div>
+  <a class="back" href="/">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+    Вернуться в каталог
+  </a>
+</nav>
+
+<main>
+  <h1>Политика конфиденциальности</h1>
+  <p class="updated">Действует в отношении сайта voroninkostroma.ru</p>
+
+  <p>Настоящая Политика конфиденциальности (далее — «Политика») определяет порядок обработки и защиты персональных данных пользователей сайта voroninkostroma.ru (далее — «Сайт»), которые могут быть получены при оформлении заказа, регистрации личного кабинета или ином обращении через формы Сайта. Политика разработана в соответствии с Федеральным законом от 27.07.2006 № 152-ФЗ «О персональных данных».</p>
+  <p>Используя формы Сайта и отмечая чекбокс согласия, пользователь подтверждает, что ознакомлен с условиями настоящей Политики и даёт согласие на обработку своих персональных данных на изложенных ниже условиях.</p>
+
+  <h2><span class="num">1.</span> Оператор персональных данных</h2>
+  <p>Оператором персональных данных является <span class="placeholder">[название компании]</span> (далее — «Оператор»), осуществляющий деятельность по адресу: г. Кострома, ул. Коммунаров, д. 40.</p>
+
+  <h2><span class="num">2.</span> Какие данные собираются</h2>
+  <p>При оформлении заказа, записи или регистрации на Сайте Оператор может собирать следующие персональные данные:</p>
+  <ul>
+    <li>имя пользователя;</li>
+    <li>номер телефона;</li>
+    <li>адрес электронной почты (email);</li>
+    <li>комментарий к заказу (если указан пользователем добровольно).</li>
+  </ul>
+  <p class="dim">Сайт не запрашивает и не обрабатывает специальные категории персональных данных (о состоянии здоровья, религиозных убеждениях и т. п.).</p>
+
+  <h2><span class="num">3.</span> Цели обработки персональных данных</h2>
+  <p>Персональные данные обрабатываются исключительно в следующих целях:</p>
+  <ul>
+    <li>обработка заявок и оформление заказов на изделия, представленные в каталоге Сайта;</li>
+    <li>связь с пользователем для уточнения деталей заказа, размера изделия, способа доставки или получения;</li>
+    <li>ведение личного кабинета пользователя (история заказов);</li>
+    <li>информирование о статусе заказа.</li>
+  </ul>
+
+  <h2><span class="num">4.</span> Передача данных третьим лицам</h2>
+  <p>Оператор не передаёт персональные данные пользователей третьим лицам, за исключением случаев, прямо предусмотренных законодательством Российской Федерации, либо при наличии отдельного согласия пользователя. Данные не используются в целях, не связанных с обработкой заказов, и не передаются для рекламных рассылок третьих лиц.</p>
+
+  <h2><span class="num">5.</span> Срок хранения данных</h2>
+  <p>Персональные данные хранятся не дольше, чем это необходимо для целей их обработки, указанных в разделе 3 настоящей Политики, либо до момента отзыва согласия пользователем — в зависимости от того, что наступит раньше. После достижения целей обработки или отзыва согласия данные удаляются либо обезличиваются.</p>
+
+  <h2><span class="num">6.</span> Права пользователя</h2>
+  <p>Пользователь вправе в любой момент:</p>
+  <ul>
+    <li>отозвать согласие на обработку персональных данных;</li>
+    <li>потребовать уточнения, блокирования или удаления своих персональных данных, если они являются неполными, устаревшими, неточными или незаконно полученными;</li>
+    <li>получить информацию о том, какие данные о нём хранятся и как они используются.</li>
+  </ul>
+  <p>Для реализации этих прав пользователю достаточно направить обращение по контактам, указанным в разделе 8.</p>
+
+  <h2><span class="num">7.</span> Защита данных</h2>
+  <p>Оператор принимает необходимые организационные и технические меры для защиты персональных данных от неправомерного или случайного доступа, уничтожения, изменения, блокирования, копирования, распространения, а также от иных неправомерных действий третьих лиц.</p>
+
+  <h2><span class="num">8.</span> Контакты для обращений</h2>
+  <p>По всем вопросам, связанным с обработкой персональных данных, — включая отзыв согласия и удаление данных — можно обратиться:</p>
+  <div class="contact-card">
+    <p><strong>Email:</strong> <span class="placeholder">[контактный email]</span></p>
+    <p><strong>Телефон:</strong> +7 910 922-35-65</p>
+    <p><strong>Адрес:</strong> г. Кострома, ул. Коммунаров, д. 40</p>
+  </div>
+
+  <h2><span class="num">9.</span> Изменения Политики</h2>
+  <p>Оператор вправе вносить изменения в настоящую Политику. Актуальная редакция всегда доступна по адресу <a href="privacy-policy.html">voroninkostroma.ru/privacy-policy.html</a>.</p>
+</main>
+
+<footer>
+  © 2026 ИП Воронин · Ювелирное производство · Кострома
+</footer>
+
+</body>
+</html>

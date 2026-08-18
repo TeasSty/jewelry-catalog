@@ -1617,6 +1617,12 @@
   document.getElementById("cartClose").addEventListener("click", () => cartOverlay.classList.remove("show"));
   cartOverlay.addEventListener("click", (e) => { if(e.target === cartOverlay) cartOverlay.classList.remove("show"); });
 
+  // Согласие на обработку персональных данных (152-ФЗ) — кнопка отправки заказа
+  // недоступна, пока не отмечено (disabled уже стоит в разметке по умолчанию).
+  document.getElementById("orderConsent").addEventListener("change", (e) => {
+    document.getElementById("submitOrderBtn").disabled = !e.target.checked;
+  });
+
   // ===== УВЕДОМЛЕНИЯ (вместо системных alert()) =====
   // Иконки — обводкой, в тон сайту (золото/красный), а не цветные эмодзи-смайлы.
   const NOTICE_ICONS = {
@@ -1839,8 +1845,18 @@
     document.getElementById("authNameGroup").style.display = mode === "register" ? "block" : "none";
     document.getElementById("forgotPasswordBtn").style.display = mode === "login" ? "block" : "none";
     document.getElementById("authError").style.display = "none";
+    // Согласие на обработку персональных данных (152-ФЗ) нужно только там, где
+    // данные реально появляются впервые — при регистрации. У входа новых данных
+    // не возникает, поэтому там ни чекбокса, ни блокировки кнопки им.
+    const authConsentGroup = document.getElementById("authConsentGroup");
+    const authConsent = document.getElementById("authConsent");
+    authConsentGroup.style.display = mode === "register" ? "flex" : "none";
+    document.getElementById("authSubmitBtn").disabled = mode === "register" && !authConsent.checked;
     authOverlay.classList.add("show");
   }
+  document.getElementById("authConsent").addEventListener("change", (e) => {
+    if (authMode === "register") document.getElementById("authSubmitBtn").disabled = !e.target.checked;
+  });
   document.getElementById("authClose").addEventListener("click", () => authOverlay.classList.remove("show"));
   authOverlay.addEventListener("click", (e) => { if(e.target === authOverlay) authOverlay.classList.remove("show"); });
   document.querySelectorAll(".auth-tab").forEach(tab => {
@@ -1872,6 +1888,13 @@
 
     if(!email || !pass){
       errEl.textContent = "Заполните email и пароль";
+      errEl.style.display = "block";
+      return;
+    }
+    // Дублирует disabled на кнопке (см. слушатели выше) — та управляет видимым
+    // состоянием, эта проверка не даёт уйти дальше, если до неё всё же дошли.
+    if(authMode === "register" && !document.getElementById("authConsent").checked){
+      errEl.textContent = "Нужно согласие на обработку персональных данных";
       errEl.style.display = "block";
       return;
     }
@@ -2049,6 +2072,11 @@
     const phoneInput = document.getElementById("orderPhone");
     const phone = phoneInput.value.trim();
     const comment = document.getElementById("orderComment").value.trim();
+
+    // Дублирует disabled на кнопке (см. слушатель checkbox выше) — тот управляет
+    // видимым состоянием, эта проверка не даёт уйти дальше, если до неё всё же
+    // дошли (например, disabled сняли через devtools).
+    if(!document.getElementById("orderConsent").checked) return;
 
     if(!firebaseAvailable || !db){
       showNotice(FIREBASE_UNAVAILABLE_MSG, { title: "Заказ недоступен", type: "error" });
