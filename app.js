@@ -332,7 +332,10 @@
             el.classList.add("active");
             
             document.getElementById("activeCatName").textContent = targetCategoryData.name;
-            scrollThenRenderGrid();
+            // Не scrollThenRenderGrid() — она безусловно закрывает мобильный сайдбар,
+            // а тут мы только что открыли панель подкатегорий и человек ещё не выбрал.
+            // Просто перерисовываем сетку под капотом, сайдбар остаётся открытым.
+            renderGrid();
           } else {
             el.classList.remove("open");
           }
